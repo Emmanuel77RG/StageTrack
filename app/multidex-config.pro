@@ -1,0 +1,2 @@
+-keep class com.example.stagetrack.MainActivity { *; }
+-keep class com.example.stagetrack.** { *; }

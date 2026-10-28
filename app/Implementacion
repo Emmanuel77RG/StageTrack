@@ -1,0 +1,257 @@
+```
+Centro Universitario UAEMex Tianguistenco
+```
+(^) Licenciatura en Ingeniería en Software (^)
+
+# PLANTEAMIENTO DEL PROBLEMA
+
+## CONTEXTO
+
+La industria de producción de eventos en vivo (conciertos, conferencias, teatro,
+corporativos) opera bajo condiciones de extrema presión de tiempo y logística. El
+núcleo de esta operación recae en el despliegue de equipos técnicos modulares de
+alto valor comercial, tales como consolas de mezcla de audio, luminarias robóticas,
+pantallas LED, microfonía inalámbrica y centros de distribución eléctrica.
+El ciclo de vida logístico de un evento involucra múltiples fases: salida de almacén
+(bodega), tránsito, montaje ( _load-in_ ), operación y desmontaje ( _load-out_ ). Durante
+estas fases, el equipo pasa por las manos de diversos actores, incluyendo jefes de
+almacén, transportistas, ingenieros de sitio y técnicos _freelance_ , operando
+frecuentemente en entornos de poca iluminación, alta exigencia física y tiempos
+limitados.
+
+## PROBLEMÁTICA
+
+A pesar del alto costo del equipo involucrado, la gestión de inventario y la asignación
+de responsabilidades en campo suelen realizarse mediante métodos arcaicos (listas
+de papel, hojas de cálculo estáticas) o basados en la confianza verbal. Esto genera
+tres problemas críticos:
+
+- **Ruptura en la cadena de custodia y dilución de responsabilidad:** Cuando
+    un equipo regresa al almacén con daños físicos (ej. un conector roto o una
+    pantalla estrellada) o faltantes, es casi imposible determinar en qué momento
+    o bajo la supervisión de quién ocurrió el incidente. Esto resulta en la clásica
+    evasión de responsabilidades entre el personal técnico y de almacén.
+- **Fuga de capital por mermas y reparaciones:** Al no existir un responsable
+    directo y comprobable de los daños, las empresas productoras o de renta
+    asumen directamente los altos costos de reparación o reemplazo,
+    impactando severamente la rentabilidad de los proyectos.
+- **Cuellos de botella operativos:** La falta de visibilidad en tiempo real sobre
+    el estado del equipo retrasa los montajes. Si un técnico descubre que una
+    consola está dañada hasta el momento de conectarla en el escenario, el
+
+
+```
+Centro Universitario UAEMex Tianguistenco
+```
+(^) Licenciatura en Ingeniería en Software (^)
+evento entero puede sufrir retrasos irreparables.
+
+## PROPUESTA DE SOLUCIÓN
+
+Desarrollar una aplicación móvil nativa en Android (Kotlin) enfocada en digitalizar y
+asegurar la trazabilidad y cadena de custodia del equipo técnico mediante validación
+criptográfica y fotográfica.
+El sistema funcionará como un "contrato digital de responsabilidad" descentralizado,
+apoyado en una arquitectura _Serverless_ (Backend as a Service como Firebase o
+Supabase) para la sincronización en tiempo real sin requerir mantenimiento de
+servidores propios. La solución se basará en:
+
+- **Identificación rápida (Escaneo QR):** Cada _flight case_ (estuche) o equipo
+    contará con un código QR. Al escanearlo, el técnico asume la custodia del
+    artículo.
+- **Evidencia Inmutable (Procesamiento Local):** Para concretar la
+    transferencia de responsabilidad, la aplicación obligará al usuario a tomar
+    una fotografía del estado físico del equipo. Localmente en el dispositivo, se
+    aplicará un algoritmo de _hashing_ criptográfico (como SHA-256) sobre los
+    bytes de la imagen, garantizando que la evidencia visual es auténtica y no
+    fue alterada ni subida desde la galería.
+- **Visibilidad en Tiempo Real (Sincronización en la Nube):** Los reportes de
+    estado (Disponible, En Tránsito, En Uso, Dañado), junto con la evidencia
+    fotográfica y los metadatos (quién escaneó, fecha y hora), se sincronizan
+    instantáneamente en la nube, permitiendo al director técnico y al jefe de
+    bodega monitorear la integridad del inventario desde cualquier ubicación.
+Esta solución elimina la ambigüedad, protege financieramente a la empresa y
+fomenta una cultura de cuidado del equipo, resolviendo el problema a través de un
+ecosistema móvil auditable y eficiente.
+
+
+```
+Centro Universitario UAEMex Tianguistenco
+```
+(^) Licenciatura en Ingeniería en Software (^)
+
+## ROLES EN LA APLICACIÓN
+
+1. **El Jefe de Bodega / Almacén:** Es quien tiene el equipo guardado. Utiliza la
+    plataforma para registrar el inventario inicial, generar e imprimir los códigos
+    QR en etiquetas adhesivas para los _flight cases_ (estuches) o directamente
+    en los equipos.
+2. **El Técnico / Operador (Usuario Principal):** El ingeniero de audio,
+    iluminador, o _roadie_ que está físicamente en el recinto. Es el responsable de
+    recibir, instalar y operar el equipo, y quien usará la app para aceptar la
+    custodia.
+3. **El Director Técnico / Productor:** Quien supervisa el evento general y
+    necesita saber desde su teléfono si todo el equipo ya llegó al recinto o si hay
+    piezas faltantes o dañadas antes de que empiece el show.
+
+# DELIMITACIONES
+
+## ALCANCE FUNCIONAL
+
+- **Gestión de roles básicos:** La aplicación diferenciará entre tres perfiles
+    operativos: Jefe de Bodega (asigna y libera), Técnico (recibe custodia) y
+    Productor (monitorea).
+- **Trazabilidad por QR:** Lectura de códigos QR integrados en la aplicación
+    para identificar unívocamente cada _flight case_ o equipo.
+- **Captura y validación de evidencia:** Uso exclusivo de la cámara dentro de
+    la app (bloqueando la subida de fotos de la galería) y generación de un hash
+    SHA-256 local para garantizar que la foto del estado del equipo es inmutable
+    y reciente.
+- **Gestión de estados:** Capacidad de cambiar el estatus del equipo en un flujo
+    definido (Bodega → En Tránsito → Custodia/Operación → Reporte de Daño
+    → Devuelto).
+
+
+```
+Centro Universitario UAEMex Tianguistenco
+```
+(^) Licenciatura en Ingeniería en Software (^)
+
+- **Sincronización en tiempo real:** Actualización del inventario y responsables
+    en la nube de manera instantánea utilizando un servicio BaaS (Backend as
+    a Service).
+
+## ALCANCE TECNOLÓGICO
+
+- **Plataforma Móvil:** El desarrollo será nativo y exclusivo para el sistema
+    operativo **Android** , utilizando **Kotlin** y **Jetpack Compose** para la interfaz de
+    usuario.
+- **Infraestructura Backend:** Se prescindirá del desarrollo de un servidor
+    propio (servidores dedicados o APIs REST personalizadas). Todo el
+    almacenamiento de datos relacionales/documentales y archivos multimedia
+    (fotografías) se gestionará a través de una plataforma _Serverless/BaaS_
+    (como Firebase o Supabase).
+- **Procesamiento Local:** Los algoritmos complejos (generación de firmas
+    criptográficas de las imágenes y lectura de QR) se ejecutarán directamente
+    en el hardware del dispositivo móvil para reducir la carga de red.
+
+## LÍMITES Y RESTRICCIONES (FUERA DE ALCANCE)
+
+Para evitar el "crecimiento descontrolado" del software, el proyecto **NO** incluirá:
+
+- **Módulos financieros o administrativos:** La app no manejará cotizaciones,
+    nóminas de personal técnico, facturación de renta de equipo, ni cálculo de
+    depreciación de activos. Su enfoque es 100% operativo y logístico.
+- **Gestión general de eventos:** No incluirá herramientas para organizar
+    catering, venta de boletos, o itinerarios de artistas.
+- **Rastreo GPS en tiempo real continuo:** Para proteger la privacidad del
+    personal y evitar el consumo excesivo de batería, la app no rastreará el
+    movimiento de los técnicos en el mapa. Únicamente se podrá adjuntar una
+    coordenada GPS estática en el momento exacto en que se escanea y acepta
+    un equipo.
+- **Plataforma iOS o Web:** En esta fase inicial (MVP), no se desarrollará una
+
+
+```
+Centro Universitario UAEMex Tianguistenco
+```
+(^) Licenciatura en Ingeniería en Software (^)
+versión para iPhone (Swift/iOS) ni un panel de control web avanzado; toda la
+operación y monitoreo ocurrirá dentro del ecosistema Android.
+
+# JUSTIFICACIÓN
+
+El desarrollo de este sistema se justifica por la necesidad de erradicar la
+ambigüedad en la cadena de custodia de equipos técnicos de alto valor,
+sustituyendo procesos logísticos manuales y vulnerables por un sistema auditable,
+descentralizado y criptográficamente seguro. La viabilidad y pertinencia de la
+aplicación se sustentan en tres ejes fundamentales:
+
+## Impacto Económico
+
+La industria de producción de eventos opera con equipos que oscilan entre cientos
+y decenas de miles de dólares (pantallas LED, consolas de mezcla, microfonía RF).
+Cuando un equipo se daña o se extravía sin un responsable claro, la empresa
+productora asume el costo total de la reparación o reposición, lo que representa una
+merma financiera severa. Al implementar una transferencia de custodia con
+evidencia fotográfica inmutable, **se cierra la fuga de capital**. El sistema actúa como
+un seguro digital: disuade la negligencia al individualizar la responsabilidad y
+proporciona pruebas irrefutables para transferir los costos de reparación a terceros
+(empresas de fletes, técnicos externos o recintos) en caso de mal uso, protegiendo
+directamente la rentabilidad operativa.
+
+## Impacto Operativo
+
+Los montajes técnicos ( _load-in_ ) se ejecutan bajo extrema presión de tiempo. Los
+métodos de control tradicionales (listas impresas o captura manual en hojas de
+cálculo) crean cuellos de botella porque dependen de una sola persona intentando
+rastrear el flujo de decenas de cajas. Esta aplicación **descentraliza la auditoría
+logística**. Al permitir que cada técnico utilice su propio dispositivo móvil para
+escanear QRs y aceptar la custodia, el proceso de entrega se paraleliza. Además,
+
+
+```
+Centro Universitario UAEMex Tianguistenco
+```
+(^) Licenciatura en Ingeniería en Software (^)
+la sincronización de estados en la nube permite a los directores técnicos identificar
+piezas dañadas en tiempo real y tomar decisiones de reemplazo proactivas antes
+de que el daño cause retrasos durante el espectáculo.
+
+## Impacto Tecnológico
+
+A nivel de ingeniería de software, el proyecto valida un modelo de arquitectura
+eficiente que resuelve problemas empresariales complejos sin incurrir en los costos
+de mantenimiento de una infraestructura de servidores tradicional. Delegar el
+procesamiento intensivo —como la decodificación de códigos QR y la aplicación del
+algoritmo _hash_ (SHA-256) sobre los _bytes_ de la imagen para garantizar su
+inmutabilidad— al **hardware local del dispositivo mediante Kotlin** , optimiza el
+consumo de red en entornos con conectividad inestable. La adopción de una
+arquitectura _Serverless/BaaS_ garantiza una sincronización en tiempo real y un
+despliegue ágil, mientras que el uso de **Jetpack Compose** asegura una interfaz
+reactiva capaz de operar fluidamente en hardware de gama media.
+
+# Objetivo General
+
+Desarrollar una aplicación móvil nativa para Android que garantice la trazabilidad y
+la cadena de custodia de equipos técnicos en producciones de eventos, utilizando
+escaneo QR y evidencia fotográfica con validación criptográfica, para establecer
+responsabilidades claras, optimizar la logística y reducir la fuga de capital por daños
+o extravíos.
+
+# Objetivos Específicos
+
+
+```
+Centro Universitario UAEMex Tianguistenco
+```
+(^) Licenciatura en Ingeniería en Software (^)
+
+- **Implementar un módulo de escaneo de códigos QR** que permita la
+    identificación ágil de cada equipo (o _flight case_ ) y facilite la transferencia
+    instantánea de custodia entre el almacén y el personal en campo.
+- **Desarrollar un sistema de captura fotográfica inmutable** integrando
+    algoritmos de _hashing_ local (como SHA-256) para asegurar que la evidencia
+    visual del estado físico del equipo sea auténtica, generada en tiempo real y
+    a prueba de manipulaciones.
+- **Integrar una arquitectura en la nube (** **_Serverless/BaaS_** **)** para sincronizar
+    de manera bidireccional y en tiempo real el estado operativo (Disponible, En
+    Tránsito, En Uso, Dañado), la ubicación y el responsable actual de cada
+    activo.
+- **Diseñar una interfaz de usuario (UI) de alta eficiencia operativa** que
+    permita a los técnicos realizar recepciones y entregas de equipo en menos
+    de 30 segundos, adaptándose a las condiciones de alta presión y baja
+    iluminación de los montajes.
+- **Crear un sistema de reporte de incidencias** que permita al personal en
+    sitio registrar daños, adjuntar notas técnicas y alertar de manera inmediata a
+    los directores técnicos y jefes de bodega para la toma de decisiones rápidas.
+
+Hipótesis
+
+**"La implementación de una aplicación móvil basada en escaneo QR,
+validación fotográfica criptográfica y sincronización en la nube (** **_Serverless_** **),
+permitirá establecer una cadena de custodia inmutable que reducirá
+significativamente la fuga de capital por daños no justificados y optimizará
+los tiempos logísticos en la entrega y recepción de equipo técnico durante la
+producción de eventos en vivo."**
+
