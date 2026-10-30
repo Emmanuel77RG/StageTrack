@@ -180,25 +180,28 @@ fun PantallaAuditoriaGlobal(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(14.dp),
+                        .padding(horizontal = 10.dp, vertical = 12.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     MetricaResumenAuditoria(
+                        modifier = Modifier.weight(1f),
                         valor = "${historialGlobal.size}",
                         etiqueta = "Total Custodias",
                         icono = Icons.Default.History,
                         colorIcono = MaterialTheme.colorScheme.primary
                     )
                     MetricaResumenAuditoria(
+                        modifier = Modifier.weight(1f),
                         valor = "$totalConSha256",
                         etiqueta = "Firmas SHA-256",
                         icono = Icons.Default.Security,
                         colorIcono = Color(0xFF4CAF50)
                     )
                     MetricaResumenAuditoria(
+                        modifier = Modifier.weight(1f),
                         valor = "$totalConGps",
-                        etiqueta = "Geolocalizados",
+                        etiqueta = "Ubicación GPS",
                         icono = Icons.Default.LocationOn,
                         colorIcono = Color(0xFF2196F3)
                     )
@@ -318,15 +321,19 @@ private enum class FiltroAuditoria(val etiqueta: String) {
 
 @Composable
 private fun MetricaResumenAuditoria(
+    modifier: Modifier = Modifier,
     valor: String,
     etiqueta: String,
     icono: androidx.compose.ui.graphics.vector.ImageVector,
     colorIcono: Color
 ) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         Box(
             modifier = Modifier
-                .size(36.dp)
+                .size(32.dp)
                 .background(colorIcono.copy(alpha = 0.15f), CircleShape),
             contentAlignment = Alignment.Center
         ) {
@@ -334,20 +341,23 @@ private fun MetricaResumenAuditoria(
                 imageVector = icono,
                 contentDescription = null,
                 tint = colorIcono,
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(18.dp)
             )
         }
-        Spacer(modifier = Modifier.width(8.dp))
+        Spacer(modifier = Modifier.width(6.dp))
         Column {
             Text(
                 text = valor,
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                maxLines = 1
             )
             Text(
                 text = etiqueta,
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.outline
+                color = MaterialTheme.colorScheme.outline,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }

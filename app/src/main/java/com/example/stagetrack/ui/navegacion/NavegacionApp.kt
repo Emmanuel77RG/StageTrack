@@ -367,6 +367,7 @@ fun NavegacionApp(
                             onNavegarEscaneoQr = { modo -> pantallaActual = Pantalla.EscaneoQr(modo) },
                             onNavegarGestionUsuarios = { pantallaActual = Pantalla.GestionUsuarios },
                             onNavegarAuditoriaGlobal = { pantallaActual = Pantalla.AuditoriaGlobal },
+                            onNavegarExportacionReportes = { pantallaActual = Pantalla.ExportacionReportes },
                             onNavegarPerfil = { pantallaActual = Pantalla.PerfilUsuario },
 
                             onNavegarTransferencia = { eq ->

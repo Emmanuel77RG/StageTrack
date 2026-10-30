@@ -852,7 +852,7 @@ private fun DashboardAdministrador(
 ) {
     var mostrarDialogoCategoriasMarcas by remember { mutableStateOf(false) }
 
-    // KPIs Globales
+    // KPIs Globales (Interactivos)
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -863,7 +863,8 @@ private fun DashboardAdministrador(
             icono = Icons.Default.People,
             colorContenedor = MaterialTheme.colorScheme.primaryContainer,
             colorTexto = MaterialTheme.colorScheme.onPrimaryContainer,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
+            onClick = onNavegarGestionUsuarios
         )
         TarjetaMetricaKpi(
             titulo = "Total Equipos",
@@ -871,7 +872,8 @@ private fun DashboardAdministrador(
             icono = Icons.Default.Inventory2,
             colorContenedor = MaterialTheme.colorScheme.secondaryContainer,
             colorTexto = MaterialTheme.colorScheme.onSecondaryContainer,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
+            onClick = onNavegarInventario
         )
         TarjetaMetricaKpi(
             titulo = "Eventos",
@@ -879,48 +881,9 @@ private fun DashboardAdministrador(
             icono = Icons.Default.Event,
             colorContenedor = MaterialTheme.colorScheme.tertiaryContainer,
             colorTexto = MaterialTheme.colorScheme.onTertiaryContainer,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
+            onClick = onNavegarEventos
         )
-    }
-
-    // Card Destacada de Administración de Usuarios
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer
-        ),
-        shape = RoundedCornerShape(16.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Default.AdminPanelSettings,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.size(28.dp)
-                )
-                Spacer(modifier = Modifier.width(10.dp))
-                Text(
-                    text = "Control de Usuarios y Accesos",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            }
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = "Registro de nuevo personal, asignación de roles, activación de cuentas y restablecimiento de claves.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            Button(
-                onClick = onNavegarGestionUsuarios,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Gestionar Usuarios (${listaUsuarios.size})", fontWeight = FontWeight.Bold)
-            }
-        }
     }
 
     // Card Destacada de Auditoría Global y Trazabilidad
@@ -1025,38 +988,6 @@ private fun DashboardAdministrador(
             onDismiss = { mostrarDialogoCategoriasMarcas = false }
         )
     }
-
-
-
-    // Grid de Accesos Generales
-    Text(
-        text = "Supervisión Global",
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.Bold
-    )
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        TarjetaAccionModulo(
-            titulo = "Inventario Global",
-            descripcion = "Catálogo completo y estado de equipos",
-            icono = Icons.AutoMirrored.Filled.List,
-            textoBoton = "Ver Catálogo",
-            onClick = onNavegarInventario,
-            modifier = Modifier.weight(1f)
-        )
-
-        TarjetaAccionModulo(
-            titulo = "Proyectos y Eventos",
-            descripcion = "Programación global de eventos",
-            icono = Icons.Default.Event,
-            textoBoton = "Ver Eventos",
-            onClick = onNavegarEventos,
-            modifier = Modifier.weight(1f)
-        )
-    }
 }
 
 /**
@@ -1069,10 +1000,13 @@ private fun TarjetaMetricaKpi(
     icono: ImageVector,
     colorContenedor: Color,
     colorTexto: Color,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null
 ) {
     Card(
-        modifier = modifier,
+        modifier = modifier.then(
+            if (onClick != null) Modifier.clickable { onClick() } else Modifier
+        ),
         colors = CardDefaults.cardColors(containerColor = colorContenedor),
         shape = RoundedCornerShape(12.dp)
     ) {
