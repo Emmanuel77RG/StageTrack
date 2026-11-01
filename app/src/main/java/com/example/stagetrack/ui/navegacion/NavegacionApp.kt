@@ -64,7 +64,7 @@ fun NavegacionApp(
     BackHandler(enabled = usuarioActual != null && pantallaActual !is Pantalla.InicioBodega) {
         when (pantallaActual) {
             is Pantalla.TransferenciaCustodia, is Pantalla.ReporteDano -> {
-                pantallaActual = Pantalla.InventarioEquipos
+                pantallaActual = Pantalla.InventarioEquipos()
             }
             is Pantalla.InventarioEvento -> {
                 pantallaActual = Pantalla.GestionEventos
@@ -184,6 +184,7 @@ fun NavegacionApp(
                     PantallaInventarioEquipos(
                         equipoViewModel = equipoViewModel,
                         usuarioActual = usuarioActual,
+                        filtroEstadoInicial = actual.filtroEstadoInicial,
                         onVolverClick = { pantallaActual = Pantalla.InicioBodega },
                         onTransferirCustodiaClick = { eq ->
                             equipoSeleccionadoParaAccion = eq
@@ -227,11 +228,11 @@ fun NavegacionApp(
                             equipo = equipoObjetivo,
                             autenticacionViewModel = autenticacionViewModel,
                             equipoViewModel = equipoViewModel,
-                            onVolverClick = { pantallaActual = Pantalla.InventarioEquipos },
-                            onTransferenciaExitosa = { pantallaActual = Pantalla.InventarioEquipos }
+                            onVolverClick = { pantallaActual = Pantalla.InventarioEquipos() },
+                            onTransferenciaExitosa = { pantallaActual = Pantalla.InventarioEquipos() }
                         )
                     } else {
-                        pantallaActual = Pantalla.InventarioEquipos
+                        pantallaActual = Pantalla.InventarioEquipos()
                     }
                 }
 
@@ -242,11 +243,11 @@ fun NavegacionApp(
                             equipo = equipoObjetivo,
                             autenticacionViewModel = autenticacionViewModel,
                             equipoViewModel = equipoViewModel,
-                            onVolverClick = { pantallaActual = Pantalla.InventarioEquipos },
-                            onReporteExitoso = { pantallaActual = Pantalla.InventarioEquipos }
+                            onVolverClick = { pantallaActual = Pantalla.InventarioEquipos() },
+                            onReporteExitoso = { pantallaActual = Pantalla.InventarioEquipos() }
                         )
                     } else {
-                        pantallaActual = Pantalla.InventarioEquipos
+                        pantallaActual = Pantalla.InventarioEquipos()
                     }
                 }
 
@@ -278,7 +279,7 @@ fun NavegacionApp(
                                     }
                                 }
                             } else {
-                                pantallaActual = Pantalla.InventarioEquipos
+                                pantallaActual = Pantalla.InventarioEquipos()
                             }
                         }
                     )
@@ -292,14 +293,14 @@ fun NavegacionApp(
                             usuarioActual = usuarioActual!!,
                             equipoViewModel = equipoViewModel,
                             qrVerificadoInicial = qrVerificadoEnEscaneo,
-                            onVolverClick = { pantallaActual = Pantalla.InventarioEquipos },
+                            onVolverClick = { pantallaActual = Pantalla.InventarioEquipos() },
                             onRecepcionExitosa = {
                                 qrVerificadoEnEscaneo = false
-                                pantallaActual = Pantalla.InventarioEquipos
+                                pantallaActual = Pantalla.InventarioEquipos()
                             }
                         )
                     } else {
-                        pantallaActual = Pantalla.InventarioEquipos
+                        pantallaActual = Pantalla.InventarioEquipos()
                     }
                 }
 
@@ -362,7 +363,7 @@ fun NavegacionApp(
                             eventos = eventos,
                             listaUsuarios = listaUsuarios,
                             equipoViewModel = equipoViewModel,
-                            onNavegarInventario = { pantallaActual = Pantalla.InventarioEquipos },
+                            onNavegarInventario = { filtro -> pantallaActual = Pantalla.InventarioEquipos(filtro) },
                             onNavegarEventos = { pantallaActual = Pantalla.GestionEventos },
                             onNavegarEscaneoQr = { modo -> pantallaActual = Pantalla.EscaneoQr(modo) },
                             onNavegarGestionUsuarios = { pantallaActual = Pantalla.GestionUsuarios },

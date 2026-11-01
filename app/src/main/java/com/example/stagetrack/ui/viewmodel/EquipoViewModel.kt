@@ -275,6 +275,70 @@ class EquipoViewModel(
         }
     }
 
+    fun enviarAEnMantenimiento(
+        idEquipo: String,
+        onResultado: (Resultado<Unit>) -> Unit
+    ) {
+        viewModelScope.launch {
+            val res = repositorioEquipo.actualizarEstadoEquipo(
+                idEquipo = idEquipo,
+                nuevoEstado = EstadoEquipo.EN_MANTENIMIENTO
+            )
+            onResultado(res)
+        }
+    }
+
+    fun finalizarMantenimientoYDevolverABodega(
+        idEquipo: String,
+        onResultado: (Resultado<Unit>) -> Unit
+    ) {
+        viewModelScope.launch {
+            val res = repositorioEquipo.actualizarEstadoCustodia(
+                idEquipo = idEquipo,
+                nuevoEstado = EstadoEquipo.EN_BODEGA,
+                idCustodio = null,
+                nombreCustodio = null
+            )
+            onResultado(res)
+        }
+    }
+
+    fun devolverEquiposDeEventoABodega(
+        idsEquipos: List<String>,
+        onResultado: (Resultado<Unit>) -> Unit
+    ) {
+        viewModelScope.launch {
+            idsEquipos.forEach { idEq ->
+                repositorioEquipo.actualizarEstadoCustodia(
+                    idEquipo = idEq,
+                    nuevoEstado = EstadoEquipo.EN_BODEGA,
+                    idCustodio = null,
+                    nombreCustodio = null
+                )
+            }
+            onResultado(Resultado.Exito(Unit))
+        }
+    }
+
+    fun restablecerTodosLosEquiposABodega(
+        onResultado: (Resultado<Unit>) -> Unit
+    ) {
+        viewModelScope.launch {
+            val equiposActuales = listaEquipos.value
+            equiposActuales.forEach { eq ->
+                repositorioEquipo.actualizarEquipo(
+                    eq.copy(
+                        estadoActual = EstadoEquipo.EN_BODEGA,
+                        idCustodioActual = null,
+                        nombreCustodioActual = null,
+                        ubicacionActual = "Bodega Principal"
+                    )
+                )
+            }
+            onResultado(Resultado.Exito(Unit))
+        }
+    }
+
     fun darDeBajaEquipo(
         idEquipo: String,
         motivoBaja: String,

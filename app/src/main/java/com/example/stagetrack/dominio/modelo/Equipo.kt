@@ -9,6 +9,7 @@ enum class EstadoEquipo {
     EN_CUSTODIA,
     EN_PROCESO_DEVOLUCION,
     REPORTADO_DANADO,
+    EN_MANTENIMIENTO,
     DEVUELTO,
     DADO_DE_BAJA
 }

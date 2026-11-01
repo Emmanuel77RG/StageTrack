@@ -90,7 +90,7 @@ fun PantallaDashboardPrincipal(
     eventos: List<Evento>,
     listaUsuarios: List<Usuario>,
     equipoViewModel: EquipoViewModel? = null,
-    onNavegarInventario: () -> Unit,
+    onNavegarInventario: (EstadoEquipo?) -> Unit = {},
     onNavegarEventos: () -> Unit,
     onNavegarEscaneoQr: (ModoEscaneoQr) -> Unit,
     onNavegarGestionUsuarios: () -> Unit,
@@ -259,7 +259,7 @@ private fun DashboardJefeBodega(
     equipos: List<Equipo>,
     eventos: List<Evento>,
     equipoViewModel: EquipoViewModel? = null,
-    onNavegarInventario: () -> Unit,
+    onNavegarInventario: (EstadoEquipo?) -> Unit,
     onNavegarEventos: () -> Unit,
     onNavegarEscaneoQr: (ModoEscaneoQr) -> Unit
 ) {
@@ -270,7 +270,7 @@ private fun DashboardJefeBodega(
     val equiposEnDevolucion = equipos.filter { it.estadoActual == EstadoEquipo.EN_PROCESO_DEVOLUCION }
     var equipoParaAceptarDevolucion by remember { mutableStateOf<Equipo?>(null) }
 
-    // Row de KPIs
+    // Row de KPIs (Interactivos)
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -281,7 +281,8 @@ private fun DashboardJefeBodega(
             icono = Icons.Default.Inventory2,
             colorContenedor = MaterialTheme.colorScheme.primaryContainer,
             colorTexto = MaterialTheme.colorScheme.onPrimaryContainer,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
+            onClick = { onNavegarInventario(EstadoEquipo.EN_BODEGA) }
         )
         TarjetaMetricaKpi(
             titulo = "Despachados",
@@ -289,7 +290,8 @@ private fun DashboardJefeBodega(
             icono = Icons.AutoMirrored.Filled.Send,
             colorContenedor = MaterialTheme.colorScheme.secondaryContainer,
             colorTexto = MaterialTheme.colorScheme.onSecondaryContainer,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
+            onClick = { onNavegarInventario(EstadoEquipo.EN_CUSTODIA) }
         )
         TarjetaMetricaKpi(
             titulo = "Averiados",
@@ -297,7 +299,8 @@ private fun DashboardJefeBodega(
             icono = Icons.Default.Warning,
             colorContenedor = MaterialTheme.colorScheme.errorContainer,
             colorTexto = MaterialTheme.colorScheme.onErrorContainer,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
+            onClick = { onNavegarInventario(EstadoEquipo.REPORTADO_DANADO) }
         )
     }
 
@@ -470,7 +473,7 @@ private fun DashboardJefeBodega(
             descripcion = "Alta de catálogo, seriales e impresión de QR",
             icono = Icons.AutoMirrored.Filled.List,
             textoBoton = "Inventario (${equipos.size})",
-            onClick = onNavegarInventario,
+            onClick = { onNavegarInventario(null) },
             modifier = Modifier.weight(1f)
         )
 
@@ -493,7 +496,7 @@ private fun DashboardTecnico(
     usuario: Usuario,
     equipos: List<Equipo>,
     eventos: List<Evento>,
-    onNavegarInventario: () -> Unit,
+    onNavegarInventario: (EstadoEquipo?) -> Unit,
     onNavegarEventos: () -> Unit,
     onNavegarEscaneoQr: (ModoEscaneoQr) -> Unit,
     onNavegarTransferencia: (Equipo) -> Unit,
@@ -503,7 +506,7 @@ private fun DashboardTecnico(
     val misEquipos = equipos.filter { it.idCustodioActual == usuario.id }
     val misEventos = eventos.filter { it.idsTecnicosAsignados.contains(usuario.id) }
 
-    // Row de KPIs del Técnico
+    // Row de KPIs del Técnico (Interactivos)
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -514,7 +517,8 @@ private fun DashboardTecnico(
             icono = Icons.Default.Build,
             colorContenedor = MaterialTheme.colorScheme.secondaryContainer,
             colorTexto = MaterialTheme.colorScheme.onSecondaryContainer,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
+            onClick = { onNavegarInventario(null) }
         )
         TarjetaMetricaKpi(
             titulo = "Mis Eventos",
@@ -522,7 +526,8 @@ private fun DashboardTecnico(
             icono = Icons.Default.Event,
             colorContenedor = MaterialTheme.colorScheme.tertiaryContainer,
             colorTexto = MaterialTheme.colorScheme.onTertiaryContainer,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
+            onClick = onNavegarEventos
         )
     }
 
@@ -613,7 +618,7 @@ private fun DashboardTecnico(
             descripcion = "Consultar inventario global de producción",
             icono = Icons.AutoMirrored.Filled.List,
             textoBoton = "Ver Inventario",
-            onClick = onNavegarInventario,
+            onClick = { onNavegarInventario(null) },
             modifier = Modifier.weight(1f)
         )
     }
@@ -729,7 +734,7 @@ private fun TarjetaEquipoAsignadoTecnico(
 private fun DashboardSupervisor(
     equipos: List<Equipo>,
     eventos: List<Evento>,
-    onNavegarInventario: () -> Unit,
+    onNavegarInventario: (EstadoEquipo?) -> Unit,
     onNavegarEventos: () -> Unit,
     onNavegarEscaneoQr: (ModoEscaneoQr) -> Unit
 ) {
@@ -737,7 +742,7 @@ private fun DashboardSupervisor(
     val equiposEnCustodia = equipos.count { it.estadoActual == EstadoEquipo.EN_CUSTODIA }
     val reportesDano = equipos.count { it.estadoActual == EstadoEquipo.REPORTADO_DANADO }
 
-    // Row de KPIs
+    // Row de KPIs (Interactivos)
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -748,7 +753,8 @@ private fun DashboardSupervisor(
             icono = Icons.Default.Event,
             colorContenedor = MaterialTheme.colorScheme.tertiaryContainer,
             colorTexto = MaterialTheme.colorScheme.onTertiaryContainer,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
+            onClick = onNavegarEventos
         )
         TarjetaMetricaKpi(
             titulo = "En Escenario",
@@ -756,7 +762,8 @@ private fun DashboardSupervisor(
             icono = Icons.Default.Build,
             colorContenedor = MaterialTheme.colorScheme.primaryContainer,
             colorTexto = MaterialTheme.colorScheme.onPrimaryContainer,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
+            onClick = { onNavegarInventario(EstadoEquipo.EN_CUSTODIA) }
         )
         TarjetaMetricaKpi(
             titulo = "Averías",
@@ -764,7 +771,8 @@ private fun DashboardSupervisor(
             icono = Icons.Default.Warning,
             colorContenedor = MaterialTheme.colorScheme.errorContainer,
             colorTexto = MaterialTheme.colorScheme.onErrorContainer,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
+            onClick = { onNavegarInventario(EstadoEquipo.REPORTADO_DANADO) }
         )
     }
 
@@ -820,7 +828,7 @@ private fun DashboardSupervisor(
             descripcion = "Supervisar custodias y ubicación de activos",
             icono = Icons.AutoMirrored.Filled.List,
             textoBoton = "Ver Inventario",
-            onClick = onNavegarInventario,
+            onClick = { onNavegarInventario(null) },
             modifier = Modifier.weight(1f)
         )
     }
@@ -846,7 +854,7 @@ private fun DashboardAdministrador(
     onNavegarGestionUsuarios: () -> Unit,
     onNavegarAuditoriaGlobal: () -> Unit,
     onNavegarExportacionReportes: () -> Unit,
-    onNavegarInventario: () -> Unit,
+    onNavegarInventario: (EstadoEquipo?) -> Unit,
     onNavegarEventos: () -> Unit,
     onNavegarEscaneoQr: (ModoEscaneoQr) -> Unit
 ) {
@@ -873,7 +881,7 @@ private fun DashboardAdministrador(
             colorContenedor = MaterialTheme.colorScheme.secondaryContainer,
             colorTexto = MaterialTheme.colorScheme.onSecondaryContainer,
             modifier = Modifier.weight(1f),
-            onClick = onNavegarInventario
+            onClick = { onNavegarInventario(null) }
         )
         TarjetaMetricaKpi(
             titulo = "Eventos",

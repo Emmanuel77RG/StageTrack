@@ -1,5 +1,6 @@
 package com.example.stagetrack.ui.navegacion
 
+import com.example.stagetrack.dominio.modelo.EstadoEquipo
 import com.example.stagetrack.dominio.modelo.ModoEscaneoQr
 
 /**
@@ -8,7 +9,7 @@ import com.example.stagetrack.dominio.modelo.ModoEscaneoQr
 sealed class Pantalla(val ruta: String) {
     data object InicioSesion : Pantalla("inicio_sesion")
     data object GestionUsuarios : Pantalla("gestion_usuarios")
-    data object InventarioEquipos : Pantalla("inventario_equipos")
+    data class InventarioEquipos(val filtroEstadoInicial: EstadoEquipo? = null) : Pantalla("inventario_equipos")
     data object TransferenciaCustodia : Pantalla("transferencia_custodia")
     data object InicioBodega : Pantalla("inicio_bodega")
     data object InicioTecnico : Pantalla("inicio_tecnico")

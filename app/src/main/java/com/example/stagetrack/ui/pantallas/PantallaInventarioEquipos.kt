@@ -25,21 +25,32 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Inventory2
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.QrCode
+import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Warning
 import com.example.stagetrack.core.imagen.UtilidadImagen
 import com.example.stagetrack.core.imagen.recordarBitmapEquipo
 import com.example.stagetrack.ui.componentes.DialogoVerReporteDano
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -90,11 +101,12 @@ import com.example.stagetrack.ui.viewmodel.EquipoViewModel
 import java.io.File
 import java.io.FileOutputStream
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun PantallaInventarioEquipos(
     equipoViewModel: EquipoViewModel,
     usuarioActual: Usuario? = null,
+    filtroEstadoInicial: EstadoEquipo? = null,
     onVolverClick: () -> Unit,
     onTransferirCustodiaClick: (Equipo) -> Unit,
     onReportarDanoClick: (Equipo) -> Unit
@@ -102,12 +114,17 @@ fun PantallaInventarioEquipos(
     val equipos by equipoViewModel.listaEquipos.collectAsState()
 
     var busquedaTexto by remember { mutableStateOf("") }
-    var estadoFiltroSeleccionado by remember { mutableStateOf<EstadoEquipo?>(null) }
+    var estadoFiltroSeleccionado by remember(filtroEstadoInicial) { mutableStateOf<EstadoEquipo?>(filtroEstadoInicial) }
+    var categoriaFiltroSeleccionada by remember { mutableStateOf<String?>(null) }
+    var mostrarModalFiltros by remember { mutableStateOf(false) }
     var vistaTecnicoSeleccionada by remember { mutableStateOf(0) } // 0 = Mis Equipos, 1 = Catálogo General
     var mostrarDialogoNuevoEquipo by remember { mutableStateOf(false) }
     var equipoParaEditar by remember { mutableStateOf<Equipo?>(null) }
     var equipoParaVerQr by remember { mutableStateOf<Equipo?>(null) }
     var equipoParaVerReporteDano by remember { mutableStateOf<Equipo?>(null) }
+    var equipoParaEnviarMantenimiento by remember { mutableStateOf<Equipo?>(null) }
+    var equipoParaFinalizarMantenimiento by remember { mutableStateOf<Equipo?>(null) }
+    var mostrarDialogoRestablecerTodo by remember { mutableStateOf(false) }
 
     val reportesDanoParaEquipo by (
         equipoParaVerReporteDano?.let { eq ->
@@ -149,7 +166,13 @@ fun PantallaInventarioEquipos(
             !esArchivado
         }
 
-        coincideTexto && coincideEstado
+        val coincideCategoria = if (!categoriaFiltroSeleccionada.isNullOrBlank()) {
+            equipo.categoria.equals(categoriaFiltroSeleccionada, ignoreCase = true)
+        } else {
+            true
+        }
+
+        coincideTexto && coincideEstado && coincideCategoria
     }
 
     Scaffold(
@@ -179,6 +202,17 @@ fun PantallaInventarioEquipos(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Volver"
                         )
+                    }
+                },
+                actions = {
+                    if (esJefeBodega || esAdmin) {
+                        IconButton(onClick = { mostrarDialogoRestablecerTodo = true }) {
+                            Icon(
+                                imageVector = Icons.Default.Restore,
+                                contentDescription = "Restablecer Todo a Bodega",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
                 }
             )
@@ -225,48 +259,67 @@ fun PantallaInventarioEquipos(
                 Spacer(modifier = Modifier.height(10.dp))
             }
 
-            OutlinedTextField(
-                value = busquedaTexto,
-                onValueChange = { busquedaTexto = it },
-                label = { Text("Buscar por nombre, serie o QR") },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.Search,
-                        contentDescription = null
-                    )
-                },
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Text(
-                text = "Filtrar por estado:",
-                style = MaterialTheme.typography.labelMedium
-            )
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            val listaEstados = remember { EstadoEquipo.entries }
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                item {
-                    FilterChip(
-                        selected = estadoFiltroSeleccionado == null,
-                        onClick = { estadoFiltroSeleccionado = null },
-                        label = { Text("Todos") }
+                OutlinedTextField(
+                    value = busquedaTexto,
+                    onValueChange = { busquedaTexto = it },
+                    label = { Text("Buscar por nombre, serie o QR") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = null
+                        )
+                    },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true
+                )
+
+                val hayFiltroActivo = estadoFiltroSeleccionado != null || !categoriaFiltroSeleccionada.isNullOrBlank()
+
+                Button(
+                    onClick = { mostrarModalFiltros = true },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (hayFiltroActivo) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = if (hayFiltroActivo) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 14.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.FilterList,
+                        contentDescription = "Filtros",
+                        modifier = Modifier.size(20.dp)
                     )
+                    if (hayFiltroActivo) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("•", fontWeight = FontWeight.Bold)
+                    }
                 }
-                items(listaEstados) { estado ->
-                    FilterChip(
-                        selected = estadoFiltroSeleccionado == estado,
-                        onClick = {
-                            estadoFiltroSeleccionado = if (estadoFiltroSeleccionado == estado) null else estado
-                        },
-                        label = { Text(obtenerEtiquetaEstado(estado)) }
-                    )
+            }
+
+            if (estadoFiltroSeleccionado != null || !categoriaFiltroSeleccionada.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    estadoFiltroSeleccionado?.let { est ->
+                        AssistChip(
+                            onClick = { estadoFiltroSeleccionado = null },
+                            label = { Text("Estado: ${obtenerEtiquetaEstado(est)} ✕") }
+                        )
+                    }
+                    categoriaFiltroSeleccionada?.let { cat ->
+                        AssistChip(
+                            onClick = { categoriaFiltroSeleccionada = null },
+                            label = { Text("Categoría: $cat ✕") }
+                        )
+                    }
                 }
             }
 
@@ -298,6 +351,7 @@ fun PantallaInventarioEquipos(
                             else -> false
                         }
 
+                        val context = LocalContext.current
                         TarjetaEquipoItem(
                             equipo = equipo,
                             esFiltroDano = (estadoFiltroSeleccionado == EstadoEquipo.REPORTADO_DANADO),
@@ -306,6 +360,12 @@ fun PantallaInventarioEquipos(
                             onTransferirCustodiaClick = if (permiteAccionesCustodia) { { onTransferirCustodiaClick(equipo) } } else null,
                             onReportarDanoClick = if (permiteAccionesCustodia) { { onReportarDanoClick(equipo) } } else null,
                             onVerReporteDanoClick = { equipoParaVerReporteDano = equipo },
+                            onEnviarAMantenimientoClick = if (esJefeBodega || esAdmin) {
+                                { equipoParaEnviarMantenimiento = equipo }
+                            } else null,
+                            onFinalizarMantenimientoClick = if (esJefeBodega || esAdmin) {
+                                { equipoParaFinalizarMantenimiento = equipo }
+                            } else null,
                             onEditarClick = if (puedeEditarEquipo) { { equipoParaEditar = equipo } } else null,
                             onDarDeBajaClick = if (puedeEditarEquipo && equipo.estadoActual != EstadoEquipo.DADO_DE_BAJA) {
                                 { equipoViewModel.darDeBajaEquipo(equipo.id, "Baja de activo") { _ -> } }
@@ -325,6 +385,233 @@ fun PantallaInventarioEquipos(
                 reportes = reportesDanoParaEquipo,
                 onDismiss = { equipoParaVerReporteDano = null }
             )
+        }
+
+        equipoParaEnviarMantenimiento?.let { equipo ->
+            val context = LocalContext.current
+            AlertDialog(
+                onDismissRequest = { equipoParaEnviarMantenimiento = null },
+                title = {
+                    Text("Confirmar Envío a Mantenimiento", fontWeight = FontWeight.Bold)
+                },
+                text = {
+                    Text(
+                        "¿Confirmas que deseas transferir el equipo \"${equipo.nombre}\" (N/S: ${equipo.numeroSerie}) al taller o área de Mantenimiento?"
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            equipoViewModel.enviarAEnMantenimiento(equipo.id) { res ->
+                                if (res is Resultado.Exito) {
+                                    Toast.makeText(context, "Equipo enviado a Mantenimiento / Taller", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                            equipoParaEnviarMantenimiento = null
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFFFF9800),
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Text("Sí, Enviar a Taller", fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { equipoParaEnviarMantenimiento = null }) {
+                        Text("Cancelar")
+                    }
+                }
+            )
+        }
+
+        equipoParaFinalizarMantenimiento?.let { equipo ->
+            val context = LocalContext.current
+            AlertDialog(
+                onDismissRequest = { equipoParaFinalizarMantenimiento = null },
+                title = {
+                    Text("Confirmar Retorno a Bodega", fontWeight = FontWeight.Bold)
+                },
+                text = {
+                    Text(
+                        "¿Confirmas que la reparación del equipo \"${equipo.nombre}\" ha finalizado y el activo vuelve a estar disponible en Bodega Principal?"
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            equipoViewModel.finalizarMantenimientoYDevolverABodega(equipo.id) { res ->
+                                if (res is Resultado.Exito) {
+                                    Toast.makeText(context, "Reparación finalizada. Equipo devuelto a Bodega", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                            equipoParaFinalizarMantenimiento = null
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        )
+                    ) {
+                        Text("Sí, Finalizar y Devolver", fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { equipoParaFinalizarMantenimiento = null }) {
+                        Text("Cancelar")
+                    }
+                }
+            )
+        }
+
+        if (mostrarDialogoRestablecerTodo) {
+            val context = LocalContext.current
+            AlertDialog(
+                onDismissRequest = { mostrarDialogoRestablecerTodo = false },
+                title = { Text("Restablecer Todo a Bodega Principal", fontWeight = FontWeight.Bold) },
+                text = {
+                    Text("¿Confirmas que deseas devolver TODOS los equipos registrados al stock disponible en 'Bodega Principal' (limpiando custodios y ubicaciones de eventos/tránsito)?")
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            equipoViewModel.restablecerTodosLosEquiposABodega { res ->
+                                if (res is Resultado.Exito) {
+                                    Toast.makeText(context, "Todos los equipos han sido devueltos a Bodega Principal", Toast.LENGTH_LONG).show()
+                                }
+                            }
+                            mostrarDialogoRestablecerTodo = false
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Text("Sí, Restablecer Todo", fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { mostrarDialogoRestablecerTodo = false }) {
+                        Text("Cancelar")
+                    }
+                }
+            )
+        }
+
+        if (mostrarModalFiltros) {
+            ModalBottomSheet(
+                onDismissRequest = { mostrarModalFiltros = false }
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 12.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Filtros de Inventario",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        if (estadoFiltroSeleccionado != null || !categoriaFiltroSeleccionada.isNullOrBlank()) {
+                            TextButton(onClick = {
+                                estadoFiltroSeleccionado = null
+                                categoriaFiltroSeleccionada = null
+                            }) {
+                                Text("Limpiar Filtros")
+                            }
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(MaterialTheme.colorScheme.outlineVariant)
+                    )
+
+                    Text(
+                        text = "Estado Operativo del Activo:",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    val listaEstados = remember { EstadoEquipo.entries }
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        FilterChip(
+                            selected = estadoFiltroSeleccionado == null,
+                            onClick = { estadoFiltroSeleccionado = null },
+                            label = { Text("Todos los Estados") }
+                        )
+                        listaEstados.forEach { estado ->
+                            FilterChip(
+                                selected = estadoFiltroSeleccionado == estado,
+                                onClick = {
+                                    estadoFiltroSeleccionado = if (estadoFiltroSeleccionado == estado) null else estado
+                                },
+                                label = { Text(obtenerEtiquetaEstado(estado)) },
+                                leadingIcon = {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(8.dp)
+                                            .background(colorPorEstado(estado), CircleShape)
+                                    )
+                                }
+                            )
+                        }
+                    }
+
+                    val categoriasDisponibles = remember(equipos) {
+                        equipos.map { it.categoria }.distinct().sorted()
+                    }
+
+                    if (categoriasDisponibles.isNotEmpty()) {
+                        Text(
+                            text = "Categoría de Equipo:",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            FilterChip(
+                                selected = categoriaFiltroSeleccionada == null,
+                                onClick = { categoriaFiltroSeleccionada = null },
+                                label = { Text("Todas las Categorías") }
+                            )
+                            categoriasDisponibles.forEach { cat ->
+                                FilterChip(
+                                    selected = categoriaFiltroSeleccionada == cat,
+                                    onClick = {
+                                        categoriaFiltroSeleccionada = if (categoriaFiltroSeleccionada == cat) null else cat
+                                    },
+                                    label = { Text(cat) }
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Button(
+                        onClick = { mostrarModalFiltros = false },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Aplicar y Ver Resultados (${equiposFiltrados.size})", fontWeight = FontWeight.Bold)
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+            }
         }
 
         if (mostrarDialogoNuevoEquipo) {
@@ -378,6 +665,8 @@ fun TarjetaEquipoItem(
     onTransferirCustodiaClick: (() -> Unit)? = null,
     onReportarDanoClick: (() -> Unit)? = null,
     onVerReporteDanoClick: (() -> Unit)? = null,
+    onEnviarAMantenimientoClick: (() -> Unit)? = null,
+    onFinalizarMantenimientoClick: (() -> Unit)? = null,
     onEditarClick: (() -> Unit)? = null,
     onDarDeBajaClick: (() -> Unit)? = null,
     onRestaurarClick: (() -> Unit)? = null
@@ -558,24 +847,68 @@ fun TarjetaEquipoItem(
 
             // Botones de acción inferiores con comportamiento dinámico inteligente
             val esEquipoDanado = equipo.estadoActual == EstadoEquipo.REPORTADO_DANADO
+            val esEnMantenimiento = equipo.estadoActual == EstadoEquipo.EN_MANTENIMIENTO
 
             if (esEquipoDanado || esFiltroDano) {
-                Button(
-                    onClick = { onVerReporteDanoClick?.invoke() },
-                    enabled = onVerReporteDanoClick != null,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                        contentColor = MaterialTheme.colorScheme.onErrorContainer
-                    ),
-                    modifier = Modifier.fillMaxWidth()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Warning,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Ver Reporte de Daño y Evidencias", fontWeight = FontWeight.Bold)
+                    Button(
+                        onClick = { onVerReporteDanoClick?.invoke() },
+                        enabled = onVerReporteDanoClick != null,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                            contentColor = MaterialTheme.colorScheme.onErrorContainer
+                        ),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Ver Daño", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+                    }
+
+                    if (onEnviarAMantenimientoClick != null) {
+                        Button(
+                            onClick = { onEnviarAMantenimientoClick.invoke() },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFFFF9800),
+                                contentColor = Color.White
+                            ),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Build,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("A Mantenimiento", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                }
+            } else if (esEnMantenimiento) {
+                if (onFinalizarMantenimientoClick != null) {
+                    Button(
+                        onClick = { onFinalizarMantenimientoClick.invoke() },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Reparación Finalizada ➔ Retornar a Bodega", fontWeight = FontWeight.Bold)
+                    }
                 }
             } else {
                 Row(
@@ -1206,6 +1539,7 @@ fun obtenerEtiquetaEstado(estado: EstadoEquipo): String {
         EstadoEquipo.EN_TRANSITO -> "En Tránsito"
         EstadoEquipo.EN_PROCESO_DEVOLUCION -> "En Devolución"
         EstadoEquipo.REPORTADO_DANADO -> "Reportado Dañado"
+        EstadoEquipo.EN_MANTENIMIENTO -> "En Mantenimiento"
         EstadoEquipo.DEVUELTO -> "Devuelto"
         EstadoEquipo.DADO_DE_BAJA -> "Dado de Baja (Archivado)"
     }
@@ -1218,6 +1552,7 @@ fun colorPorEstado(estado: EstadoEquipo) = when (estado) {
     EstadoEquipo.EN_TRANSITO -> MaterialTheme.colorScheme.secondary
     EstadoEquipo.EN_PROCESO_DEVOLUCION -> MaterialTheme.colorScheme.tertiary
     EstadoEquipo.REPORTADO_DANADO -> MaterialTheme.colorScheme.error
+    EstadoEquipo.EN_MANTENIMIENTO -> Color(0xFFFF9800)
     EstadoEquipo.DEVUELTO -> MaterialTheme.colorScheme.outline
     EstadoEquipo.DADO_DE_BAJA -> MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
 }
