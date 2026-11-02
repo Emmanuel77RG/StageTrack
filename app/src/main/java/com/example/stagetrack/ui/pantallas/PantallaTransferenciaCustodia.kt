@@ -374,6 +374,7 @@ fun PantallaTransferenciaCustodia(
                             val receptorObj = listaUsuarios.find { it.id == idReceptorSeleccionado }
                             val nombreReceptor = receptorObj?.nombre ?: "Usuario"
                             equipoViewModel.realizarTransferenciaCustodia(
+                                context = context,
                                 idEquipo = equipo.id,
                                 idEmisor = usuarioEmisor!!.id,
                                 idReceptor = idReceptorSeleccionado,

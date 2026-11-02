@@ -40,12 +40,24 @@ import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.MoveToInbox
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.ui.unit.sp
+import com.example.stagetrack.datos.repositorio.GestorNotificaciones
+import com.example.stagetrack.dominio.modelo.NotificacionApp
+import com.example.stagetrack.dominio.modelo.TipoNotificacion
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import com.example.stagetrack.ui.componentes.DialogoAceptarDevolucionQr
+import com.example.stagetrack.ui.componentes.DialogoGestionPermisos
 import com.example.stagetrack.ui.viewmodel.EquipoViewModel
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -56,7 +68,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -104,6 +119,64 @@ fun PantallaDashboardPrincipal(
 ) {
     val scrollState = rememberScrollState()
 
+    val notificacionesState by GestorNotificaciones.notificaciones.collectAsState()
+    val notificacionesUsuario = remember(notificacionesState, usuarioActual) {
+        notificacionesState.filter {
+            it.idUsuarioDestino == usuarioActual.id ||
+            it.idUsuarioDestino.equals("todos", ignoreCase = true) ||
+            (usuarioActual.rol == RolUsuario.JEFE_BODEGA && it.idUsuarioDestino == "bodega")
+        }
+    }
+    val notificacionesNoLeidasCount = remember(notificacionesUsuario) {
+        notificacionesUsuario.count { !it.leida }
+    }
+    var mostrarModalNotificaciones by remember { mutableStateOf(false) }
+    var mostrarModalPermisos by remember { mutableStateOf(false) }
+
+    LaunchedEffect(equipos, usuarioActual, notificacionesUsuario) {
+        val traspasosPendientes = equipos.filter {
+            it.idCustodioActual == usuarioActual.id && it.estadoActual == EstadoEquipo.EN_TRANSITO
+        }
+        if (traspasosPendientes.isNotEmpty()) {
+            val primerPendiente = traspasosPendientes.first()
+            val yaExisteNotificacion = notificacionesUsuario.any {
+                it.idEntidadRelacionada == primerPendiente.id
+            }
+            if (!yaExisteNotificacion) {
+                GestorNotificaciones.agregarNotificacion(
+                    context = null,
+                    idUsuarioActualLogueado = usuarioActual.id,
+                    idUsuarioDestino = usuarioActual.id,
+                    titulo = "📦 Recepción de Custodia Pendiente",
+                    mensaje = "Tienes ${traspasosPendientes.size} equipo(s) pendiente(s) de confirmación (\"${primerPendiente.nombre}\"). Toca para aceptar.",
+                    tipo = TipoNotificacion.TRANSFERENCIA_CUSTODIA,
+                    idEntidadRelacionada = primerPendiente.id
+                )
+            }
+        }
+
+        val devolucionesPendientes = equipos.filter {
+            it.estadoActual == EstadoEquipo.EN_PROCESO_DEVOLUCION
+        }
+        if (usuarioActual.rol == RolUsuario.JEFE_BODEGA && devolucionesPendientes.isNotEmpty()) {
+            val primerDev = devolucionesPendientes.first()
+            val yaExisteNotifBodega = notificacionesUsuario.any {
+                it.idEntidadRelacionada == primerDev.id
+            }
+            if (!yaExisteNotifBodega) {
+                GestorNotificaciones.agregarNotificacion(
+                    context = null,
+                    idUsuarioActualLogueado = usuarioActual.id,
+                    idUsuarioDestino = "bodega",
+                    titulo = "🔄 Devolución a Bodega Pendiente",
+                    mensaje = "Tienes ${devolucionesPendientes.size} equipo(s) en proceso de devolución (\"${primerDev.nombre}\"). Toca para confirmar recepción.",
+                    tipo = TipoNotificacion.DEVOLUCION_BODEGA,
+                    idEntidadRelacionada = primerDev.id
+                )
+            }
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -118,6 +191,9 @@ fun PantallaDashboardPrincipal(
         // Encabezado de Usuario
         EncabezadoDashboard(
             usuario = usuarioActual,
+            notificacionesNoLeidasCount = notificacionesNoLeidasCount,
+            onAbrirNotificaciones = { mostrarModalNotificaciones = true },
+            onAbrirPermisos = { mostrarModalPermisos = true },
             onNavegarPerfil = onNavegarPerfil,
             onCerrarSesion = onCerrarSesion
         )
@@ -171,6 +247,38 @@ fun PantallaDashboardPrincipal(
             }
         }
     }
+
+    if (mostrarModalNotificaciones) {
+        DialogoNotificacionesUsuario(
+            notificaciones = notificacionesUsuario,
+            onDismiss = { mostrarModalNotificaciones = false },
+            onMarcarTodasLeidas = {
+                GestorNotificaciones.marcarTodasComoLeidas(usuarioActual.id)
+            },
+            onNotificacionClick = { notif ->
+                GestorNotificaciones.marcarComoLeida(notif.id)
+                mostrarModalNotificaciones = false
+                when (notif.tipo) {
+                    TipoNotificacion.TRANSFERENCIA_CUSTODIA -> {
+                        onNavegarInventario(EstadoEquipo.EN_TRANSITO)
+                    }
+                    TipoNotificacion.DEVOLUCION_BODEGA -> {
+                        onNavegarInventario(EstadoEquipo.EN_PROCESO_DEVOLUCION)
+                    }
+                    TipoNotificacion.ASIGNACION_EVENTO -> {
+                        onNavegarEventos()
+                    }
+                    else -> {}
+                }
+            }
+        )
+    }
+
+    if (mostrarModalPermisos) {
+        DialogoGestionPermisos(
+            onDismiss = { mostrarModalPermisos = false }
+        )
+    }
 }
 
 /**
@@ -179,6 +287,9 @@ fun PantallaDashboardPrincipal(
 @Composable
 private fun EncabezadoDashboard(
     usuario: Usuario,
+    notificacionesNoLeidasCount: Int = 0,
+    onAbrirNotificaciones: () -> Unit = {},
+    onAbrirPermisos: () -> Unit = {},
     onNavegarPerfil: () -> Unit,
     onCerrarSesion: () -> Unit
 ) {
@@ -240,15 +351,156 @@ private fun EncabezadoDashboard(
                 }
             }
 
-            IconButton(onClick = onCerrarSesion) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ExitToApp,
-                    contentDescription = "Cerrar sesión",
-                    tint = MaterialTheme.colorScheme.error
-                )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onAbrirPermisos) {
+                    Icon(
+                        imageVector = Icons.Default.Security,
+                        contentDescription = "Estado de Permisos",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                Box {
+                    IconButton(onClick = onAbrirNotificaciones) {
+                        Icon(
+                            imageVector = Icons.Default.Notifications,
+                            contentDescription = "Notificaciones",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    if (notificacionesNoLeidasCount > 0) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(top = 6.dp, end = 6.dp)
+                                .size(16.dp)
+                                .background(Color.Red, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = if (notificacionesNoLeidasCount > 9) "9+" else "$notificacionesNoLeidasCount",
+                                color = Color.White,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+
+                IconButton(onClick = onCerrarSesion) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                        contentDescription = "Cerrar sesión",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
             }
         }
     }
+}
+
+@Composable
+fun DialogoNotificacionesUsuario(
+    notificaciones: List<NotificacionApp>,
+    onDismiss: () -> Unit,
+    onMarcarTodasLeidas: () -> Unit,
+    onNotificacionClick: (NotificacionApp) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Notificaciones", fontWeight = FontWeight.Bold)
+                if (notificaciones.any { !it.leida }) {
+                    TextButton(onClick = onMarcarTodasLeidas) {
+                        Text("Marcar leídas", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+        },
+        text = {
+            if (notificaciones.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(140.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            imageVector = Icons.Default.NotificationsNone,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.outline,
+                            modifier = Modifier.size(36.dp)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "No tienes notificaciones recibidas aún.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(280.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(notificaciones, key = { it.id }) { notif ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onNotificacionClick(notif) },
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (!notif.leida)
+                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                            ),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = notif.titulo,
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    val fechaTexto = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(notif.fechaTimestamp))
+                                    Text(
+                                        text = fechaTexto,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.outline
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = notif.mensaje,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cerrar")
+            }
+        }
+    )
 }
 
 /**
@@ -632,10 +884,12 @@ private fun TarjetaEquipoAsignadoTecnico(
     equipo: Equipo,
     onVerFichaTecnica: (() -> Unit)? = null,
     onTransferir: () -> Unit,
-    onReportarDano: () -> Unit
+    onReportarDano: () -> Unit,
+    onRecibir: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val bitmapEquipo = recordarBitmapEquipo(context, equipo.urlImagen)
+    val esCustodiaPendiente = equipo.estadoActual == EstadoEquipo.EN_TRANSITO
 
     Card(
         modifier = Modifier
@@ -646,7 +900,10 @@ private fun TarjetaEquipoAsignadoTecnico(
                 } else Modifier
             ),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
+            containerColor = if (esCustodiaPendiente)
+                MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.35f)
+            else
+                MaterialTheme.colorScheme.surfaceVariant
         ),
         shape = RoundedCornerShape(12.dp)
     ) {
@@ -701,26 +958,39 @@ private fun TarjetaEquipoAsignadoTecnico(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
+            if (esCustodiaPendiente) {
                 Button(
-                    onClick = onTransferir,
-                    modifier = Modifier.weight(1f),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 4.dp, horizontal = 4.dp)
-                ) {
-                    Text("Traspasar", style = MaterialTheme.typography.labelSmall)
-                }
-                OutlinedButton(
-                    onClick = onReportarDano,
-                    modifier = Modifier.weight(1f),
+                    onClick = { onRecibir?.invoke() ?: onTransferir() },
+                    modifier = Modifier.fillMaxWidth(),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 4.dp, horizontal = 4.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.tertiary
                     )
                 ) {
-                    Text("Dañado", style = MaterialTheme.typography.labelSmall)
+                    Text("Recibir", style = MaterialTheme.typography.labelSmall)
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Button(
+                        onClick = onTransferir,
+                        modifier = Modifier.weight(1f),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 4.dp, horizontal = 4.dp)
+                    ) {
+                        Text("Traspasar", style = MaterialTheme.typography.labelSmall)
+                    }
+                    OutlinedButton(
+                        onClick = onReportarDano,
+                        modifier = Modifier.weight(1f),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 4.dp, horizontal = 4.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Text("Dañado", style = MaterialTheme.typography.labelSmall)
+                    }
                 }
             }
         }

@@ -93,6 +93,88 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        // Vincular repositorio de autenticación y contexto a GestorNotificaciones
+        com.example.stagetrack.datos.repositorio.GestorNotificaciones.repositorioAuthFirebase = repositorioAutenticacion
+        com.example.stagetrack.datos.repositorio.GestorNotificaciones.contextAplicacion = applicationContext
+
+        // Inicializar canal de notificaciones y solicitar permiso en Android 13+ (API 33+)
+        com.example.stagetrack.core.notificaciones.UtilidadNotificaciones.crearCanalNotificaciones(applicationContext)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 101)
+            }
+        }
+
+        // Obtener FCM Token de este dispositivo para notificaciones Push con app cerrada
+        try {
+            com.google.firebase.messaging.FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
+                if (task.isSuccessful) {
+                    val token = task.result
+                    Log.d("MainActivity", "FCM Token obtenido: $token")
+                    val uId = autenticacionViewModel.usuarioActual.value?.id
+                    if (uId != null && !token.isNullOrBlank()) {
+                        autenticacionViewModel.registrarFcmTokenDispositivo(uId, token)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("MainActivity", "Aviso FCM Token: ${e.message}")
+        }
+
+        // Suscribir el dispositivo al Tópico Push del usuario para notificaciones con app cerrada
+        lifecycleScope.launch {
+            autenticacionViewModel.usuarioActual.collect { usr ->
+                if (usr != null) {
+                    try {
+                        val fcm = com.google.firebase.messaging.FirebaseMessaging.getInstance()
+                        fcm.subscribeToTopic("usuario_${usr.id}")
+                        fcm.subscribeToTopic("todos")
+                        if (usr.rol == com.example.stagetrack.dominio.modelo.RolUsuario.JEFE_BODEGA) {
+                            fcm.subscribeToTopic("usuario_bodega")
+                            fcm.subscribeToTopic("bodega")
+                            Log.d("MainActivity", "Jefe de Bodega suscrito a tópicos: usuario_bodega y bodega")
+                        }
+                        Log.d("MainActivity", "Dispositivo suscrito a tópico FCM: usuario_${usr.id}")
+                    } catch (e: Exception) {
+                        Log.w("MainActivity", "Aviso suscripción FCM: ${e.message}")
+                    }
+                }
+            }
+        }
+
+        // Programar WorkManager en el sistema operativo Android para revisiones en segundo plano con app cerrada
+        try {
+            val restricciones = androidx.work.Constraints.Builder()
+                .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
+                .build()
+
+            val peticionFondo = androidx.work.PeriodicWorkRequestBuilder<com.example.stagetrack.core.notificaciones.NotificacionBackgroundWorker>(
+                15, java.util.concurrent.TimeUnit.MINUTES
+            )
+            .setConstraints(restricciones)
+            .build()
+
+            androidx.work.WorkManager.getInstance(applicationContext).enqueueUniquePeriodicWork(
+                "work_notificaciones_stagetrack",
+                androidx.work.ExistingPeriodicWorkPolicy.KEEP,
+                peticionFondo
+            )
+
+            val peticionSincroOffline = androidx.work.PeriodicWorkRequestBuilder<com.example.stagetrack.core.sincronizacion.SincronizadorOfflineWorker>(
+                15, java.util.concurrent.TimeUnit.MINUTES
+            )
+            .setConstraints(restricciones)
+            .build()
+
+            androidx.work.WorkManager.getInstance(applicationContext).enqueueUniquePeriodicWork(
+                "work_sincronizador_offline_stagetrack",
+                androidx.work.ExistingPeriodicWorkPolicy.KEEP,
+                peticionSincroOffline
+            )
+        } catch (e: Exception) {
+            Log.w("MainActivity", "Aviso WorkManager: ${e.message}")
+        }
+
         // Poblado inicial de datos en la base de datos local Room si está vacía
         lifecycleScope.launch(Dispatchers.IO) {
             try {

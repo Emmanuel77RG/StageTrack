@@ -18,4 +18,7 @@ interface DaoReporteDano {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertarReporteDano(reporte: EntidadReporteDano)
+
+    @Query("SELECT * FROM reportes_dano WHERE sincronizado = 0")
+    suspend fun obtenerReportesDanoPendientesSincronizacion(): List<EntidadReporteDano>
 }

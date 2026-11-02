@@ -223,6 +223,7 @@ fun DialogoFichaTecnicaEquipo(
             }
         },
         confirmButton = {
+            val esCustodiaPendiente = equipo.estadoActual == EstadoEquipo.EN_TRANSITO
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -238,7 +239,7 @@ fun DialogoFichaTecnicaEquipo(
                     }
                 }
 
-                if (!esDanado && (esCustodioActual || esGestionador) && onReportarDanoClick != null) {
+                if (!esDanado && !esCustodiaPendiente && (esCustodioActual || esGestionador) && onReportarDanoClick != null) {
                     OutlinedButton(
                         onClick = onReportarDanoClick,
                         colors = ButtonDefaults.outlinedButtonColors(
@@ -263,7 +264,10 @@ fun DialogoFichaTecnicaEquipo(
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Traspasar", style = MaterialTheme.typography.labelMedium)
+                        Text(
+                            if (esCustodiaPendiente) "Recibir" else "Traspasar",
+                            style = MaterialTheme.typography.labelMedium
+                        )
                     }
                 }
             }

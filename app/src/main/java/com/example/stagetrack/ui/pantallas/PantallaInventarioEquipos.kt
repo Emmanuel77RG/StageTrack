@@ -117,7 +117,6 @@ fun PantallaInventarioEquipos(
     var estadoFiltroSeleccionado by remember(filtroEstadoInicial) { mutableStateOf<EstadoEquipo?>(filtroEstadoInicial) }
     var categoriaFiltroSeleccionada by remember { mutableStateOf<String?>(null) }
     var mostrarModalFiltros by remember { mutableStateOf(false) }
-    var vistaTecnicoSeleccionada by remember { mutableStateOf(0) } // 0 = Mis Equipos, 1 = Catálogo General
     var mostrarDialogoNuevoEquipo by remember { mutableStateOf(false) }
     var equipoParaEditar by remember { mutableStateOf<Equipo?>(null) }
     var equipoParaVerQr by remember { mutableStateOf<Equipo?>(null) }
@@ -142,13 +141,9 @@ fun PantallaInventarioEquipos(
     val puedeRegistrarEquipo = esJefeBodega || esAdmin
     val puedeGenerarQr = esJefeBodega || esAdmin
 
-    // Para el Técnico se le permite alternar entre "Mis Equipos" y la consulta del "Catálogo General"
-    val equiposVisiblesPorRol = if (esTecnico && usuarioActual != null) {
-        if (vistaTecnicoSeleccionada == 0) {
-            equipos.filter { it.idCustodioActual == usuarioActual.id || it.estadoActual == EstadoEquipo.EN_TRANSITO }
-        } else {
-            equipos
-        }
+    // Para el Técnico únicamente se muestran los equipos asignados directamente a su cuenta (en custodia, tránsito o devolución)
+    val equiposVisiblesPorRol = if (esTecnico) {
+        equipos.filter { it.idCustodioActual == usuarioActual.id }
     } else {
         equipos
     }
@@ -181,16 +176,12 @@ fun PantallaInventarioEquipos(
                 title = {
                     Column {
                         Text(
-                            text = if (esTecnico) {
-                                if (vistaTecnicoSeleccionada == 0) "Mis Equipos en Custodia" else "Catálogo General de Bodega"
-                            } else "Inventario Global de Bodega",
+                            text = if (esTecnico) "Mis Equipos a Cargo" else "Inventario Global de Bodega",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = if (esTecnico) {
-                                if (vistaTecnicoSeleccionada == 0) "Equipos Asignados a Mi Nombre" else "Consulta de Stock Disponible"
-                            } else "Catálogo Maestro de Activos",
+                            text = if (esTecnico) "Equipos Asignados, en Tránsito o Devolución" else "Catálogo Maestro de Activos",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -234,30 +225,6 @@ fun PantallaInventarioEquipos(
                 .padding(paddingValues)
                 .padding(16.dp)
         ) {
-            // Selector de pestaña de vista rápida para Técnicos
-            if (esTecnico) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    val misEquiposCount = remember(equipos, usuarioActual) {
-                        equipos.count { it.idCustodioActual == usuarioActual?.id }
-                    }
-                    FilterChip(
-                        selected = vistaTecnicoSeleccionada == 0,
-                        onClick = { vistaTecnicoSeleccionada = 0 },
-                        label = { Text("Mis Equipos ($misEquiposCount)") },
-                        modifier = Modifier.weight(1f)
-                    )
-                    FilterChip(
-                        selected = vistaTecnicoSeleccionada == 1,
-                        onClick = { vistaTecnicoSeleccionada = 1 },
-                        label = { Text("Catálogo General (${equipos.size})") },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-                Spacer(modifier = Modifier.height(10.dp))
-            }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -537,7 +504,18 @@ fun PantallaInventarioEquipos(
                         fontWeight = FontWeight.Bold
                     )
 
-                    val listaEstados = remember { EstadoEquipo.entries }
+                    val listaEstados = remember(esTecnico) {
+                        if (esTecnico) {
+                            listOf(
+                                EstadoEquipo.EN_TRANSITO,
+                                EstadoEquipo.EN_CUSTODIA,
+                                EstadoEquipo.EN_PROCESO_DEVOLUCION,
+                                EstadoEquipo.REPORTADO_DANADO
+                            )
+                        } else {
+                            EstadoEquipo.entries.toList()
+                        }
+                    }
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -566,8 +544,8 @@ fun PantallaInventarioEquipos(
                         }
                     }
 
-                    val categoriasDisponibles = remember(equipos) {
-                        equipos.map { it.categoria }.distinct().sorted()
+                    val categoriasDisponibles = remember(equiposVisiblesPorRol) {
+                        equiposVisiblesPorRol.map { it.categoria }.distinct().sorted()
                     }
 
                     if (categoriasDisponibles.isNotEmpty()) {

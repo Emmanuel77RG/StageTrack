@@ -28,7 +28,7 @@ import com.example.stagetrack.datos.local.entidad.EntidadUsuario
         EntidadUsuario::class,
         EntidadEvento::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 abstract class BaseDatosStageTrack : RoomDatabase() {
@@ -181,6 +181,14 @@ abstract class BaseDatosStageTrack : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                try {
+                    db.execSQL("ALTER TABLE usuarios ADD COLUMN fcmToken TEXT DEFAULT NULL")
+                } catch (_: Exception) {}
+            }
+        }
+
         fun obtenerInstancia(contexto: Context): BaseDatosStageTrack {
             return INSTANCIA ?: synchronized(this) {
                 val instancia = Room.databaseBuilder(
@@ -188,7 +196,7 @@ abstract class BaseDatosStageTrack : RoomDatabase() {
                     BaseDatosStageTrack::class.java,
                     "stagetrack_db"
                 )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_1_5, MIGRATION_5_6, MIGRATION_6_7)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_1_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
                 .fallbackToDestructiveMigration()
                 .fallbackToDestructiveMigrationOnDowngrade()
                 .build()

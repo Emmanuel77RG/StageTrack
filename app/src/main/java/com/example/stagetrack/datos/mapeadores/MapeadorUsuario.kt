@@ -29,7 +29,8 @@ object MapeadorUsuario {
             esPrimerInicio = entidad.esPrimerInicio,
             correoVerificado = entidad.correoVerificado,
             fechaCreacion = entidad.fechaCreacion,
-            activo = entidad.activo
+            activo = entidad.activo,
+            fcmToken = entidad.fcmToken
         )
     }
 
@@ -48,7 +49,8 @@ object MapeadorUsuario {
             esPrimerInicio = dominio.esPrimerInicio,
             correoVerificado = dominio.correoVerificado,
             fechaCreacion = dominio.fechaCreacion,
-            activo = dominio.activo
+            activo = dominio.activo,
+            fcmToken = dominio.fcmToken
         )
     }
 }

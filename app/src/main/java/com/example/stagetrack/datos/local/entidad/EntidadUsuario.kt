@@ -18,5 +18,6 @@ data class EntidadUsuario(
     val esPrimerInicio: Boolean = false,
     val correoVerificado: Boolean = false,
     val fechaCreacion: Long = System.currentTimeMillis(),
-    val activo: Boolean = true
+    val activo: Boolean = true,
+    val fcmToken: String? = null
 )

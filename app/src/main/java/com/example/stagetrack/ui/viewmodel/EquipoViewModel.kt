@@ -123,6 +123,7 @@ class EquipoViewModel(
     }
 
     fun realizarTransferenciaCustodia(
+        context: Context? = null,
         idEquipo: String,
         idEmisor: String,
         idReceptor: String,
@@ -154,6 +155,38 @@ class EquipoViewModel(
                     idCustodio = idReceptor,
                     nombreCustodio = nombreReceptor
                 )
+
+                val equipoActual = listaEquipos.value.find { it.id == idEquipo }
+                val nombreEquipo = equipoActual?.nombre ?: "Equipo"
+                val serieEquipo = equipoActual?.numeroSerie ?: idEquipo
+
+                val titulo = "📦 Transferencia de Custodia Recibida"
+                val mensaje = "Se te ha asignado la custodia del equipo \"$nombreEquipo\" (N/S: $serieEquipo). Revisa tu panel para confirmar recepción."
+
+                com.example.stagetrack.datos.repositorio.GestorNotificaciones.agregarNotificacion(
+                    context = context,
+                    idUsuarioActualLogueado = idEmisor,
+                    idUsuarioDestino = idReceptor,
+                    titulo = titulo,
+                    mensaje = mensaje,
+                    tipo = com.example.stagetrack.dominio.modelo.TipoNotificacion.TRANSFERENCIA_CUSTODIA,
+                    idEntidadRelacionada = idEquipo
+                )
+
+                viewModelScope.launch {
+                    try {
+                        if (context != null) {
+                            com.example.stagetrack.core.notificaciones.UtilidadFcmPush.enviarNotificacionPushDirecta(
+                                context = context,
+                                fcmTokenDestino = "",
+                                titulo = titulo,
+                                mensaje = mensaje,
+                                tipo = "TRANSFERENCIA_CUSTODIA",
+                                idUsuarioDestino = idReceptor
+                            )
+                        }
+                    } catch (_: Exception) {}
+                }
             }
             onResultado(resCustodia)
         }
@@ -255,6 +288,39 @@ class EquipoViewModel(
                     idCustodio = idTecnicoEmisor,
                     nombreCustodio = nombreTecnicoEmisor
                 )
+
+                val equipoActual = listaEquipos.value.find { it.id == idEquipo }
+                val nombreEquipo = equipoActual?.nombre ?: "Equipo"
+
+                val titulo = "🔄 Devolución a Bodega Recibida"
+                val mensaje = "El técnico $nombreTecnicoEmisor ha devuelto el equipo \"$nombreEquipo\". Confirma recepción en Bodega."
+
+                com.example.stagetrack.datos.repositorio.GestorNotificaciones.agregarNotificacion(
+                    context = null,
+                    idUsuarioActualLogueado = idTecnicoEmisor,
+                    idUsuarioDestino = "bodega",
+                    titulo = titulo,
+                    mensaje = mensaje,
+                    tipo = com.example.stagetrack.dominio.modelo.TipoNotificacion.DEVOLUCION_BODEGA,
+                    idEntidadRelacionada = idEquipo
+                )
+
+                // Despachar notificación Push FCM en segundo plano dirigida al Tópico de Bodega
+                viewModelScope.launch {
+                    try {
+                        val ctx = com.example.stagetrack.datos.repositorio.GestorNotificaciones.contextAplicacion
+                        if (ctx != null) {
+                            com.example.stagetrack.core.notificaciones.UtilidadFcmPush.enviarNotificacionPushDirecta(
+                                context = ctx,
+                                fcmTokenDestino = "",
+                                titulo = titulo,
+                                mensaje = mensaje,
+                                tipo = "DEVOLUCION_BODEGA",
+                                idUsuarioDestino = "bodega"
+                            )
+                        }
+                    } catch (_: Exception) {}
+                }
             }
             onResultado(resCustodia)
         }

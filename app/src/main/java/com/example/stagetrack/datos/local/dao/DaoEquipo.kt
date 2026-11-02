@@ -33,4 +33,7 @@ interface DaoEquipo {
         nombreCustodio: String?,
         sincronizado: Boolean
     )
+
+    @Query("SELECT * FROM equipos WHERE sincronizado = 0")
+    suspend fun obtenerEquiposPendientesSincronizacion(): List<EntidadEquipo>
 }

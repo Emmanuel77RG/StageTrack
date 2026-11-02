@@ -8,6 +8,7 @@ import com.example.stagetrack.datos.local.dao.DaoUsuario
 import com.example.stagetrack.datos.local.entidad.EntidadUsuario
 import com.example.stagetrack.datos.mapeadores.MapeadorUsuario
 import com.example.stagetrack.dominio.modelo.RolUsuario
+import com.example.stagetrack.dominio.modelo.TipoNotificacion
 import com.example.stagetrack.dominio.modelo.Usuario
 import com.example.stagetrack.dominio.repositorio.RepositorioAutenticacion
 import com.google.firebase.FirebaseApp
@@ -87,6 +88,7 @@ class RepositorioAutenticacionFirebase(
                                 val correoUsr = doc.getString("correo") ?: ""
                                 val activoUsr = doc.getBoolean("activo") ?: true
                                 val fechaCreacionUsr = doc.getLong("fechaCreacion") ?: System.currentTimeMillis()
+                                val fcmTokenUsr = doc.getString("fcmToken")
 
                                 val entidadExistente = daoUsuario.obtenerUsuarioPorId(idUsr)
                                 if (entidadExistente != null) {
@@ -98,7 +100,8 @@ class RepositorioAutenticacionFirebase(
                                         correoRecuperacion = correoRec ?: entidadExistente.correoRecuperacion,
                                         esPrimerInicio = esPrimerIn,
                                         correoVerificado = correoVer,
-                                        activo = activoUsr
+                                        activo = activoUsr,
+                                        fcmToken = fcmTokenUsr ?: entidadExistente.fcmToken
                                     )
                                     daoUsuario.insertarOActualizarUsuario(entidadActualizada)
                                     if (_usuarioLocalActual.value?.id == idUsr) {
@@ -129,6 +132,44 @@ class RepositorioAutenticacionFirebase(
             }
         } catch (e: Exception) {
             Log.w("RepositorioAuthFirebase", "Aviso al suscribir escuchador de usuarios en Firestore: ${e.message}")
+        }
+
+        // Listener en tiempo real para notificaciones Push e instantáneas entre dispositivos
+        try {
+            firestore?.collection("notificaciones")
+                ?.addSnapshotListener { snapshot, error ->
+                    if (error != null || snapshot == null) return@addSnapshotListener
+                    val uActualId = _usuarioLocalActual.value?.id ?: return@addSnapshotListener
+
+                    snapshot.documentChanges.forEach { change ->
+                        if (change.type == com.google.firebase.firestore.DocumentChange.Type.ADDED) {
+                            val doc = change.document
+                            val idDestino = doc.getString("idUsuarioDestino") ?: ""
+                            val idEmisor = doc.getString("idUsuarioEmisor") ?: ""
+
+                            if ((idDestino == uActualId || idDestino == "todos" || (_usuarioLocalActual.value?.rol == RolUsuario.JEFE_BODEGA && idDestino == "bodega")) && idEmisor != uActualId) {
+                                val titulo = doc.getString("titulo") ?: "StageTrack"
+                                val mensaje = doc.getString("mensaje") ?: "Nueva actualización de inventario"
+                                val tipoStr = doc.getString("tipo") ?: "SISTEMA"
+                                val tipo = try { TipoNotificacion.valueOf(tipoStr) } catch (_: Exception) { TipoNotificacion.SISTEMA }
+                                val idEntidad = doc.getString("idEntidadRelacionada")
+
+                                Log.d("RepositorioAuthFirebase", "¡Notificación Firestore recibida! $titulo")
+                                GestorNotificaciones.agregarNotificacion(
+                                    context = null,
+                                    idUsuarioActualLogueado = uActualId,
+                                    idUsuarioDestino = uActualId,
+                                    titulo = titulo,
+                                    mensaje = mensaje,
+                                    tipo = tipo,
+                                    idEntidadRelacionada = idEntidad
+                                )
+                            }
+                        }
+                    }
+                }
+        } catch (e: Exception) {
+            Log.w("RepositorioAuthFirebase", "Aviso listener notificaciones Firestore: ${e.message}")
         }
     }
 
@@ -751,6 +792,48 @@ class RepositorioAutenticacionFirebase(
             Resultado.Exito(creadosONuevos)
         } catch (e: Exception) {
             Resultado.Error(e, "Error al sincronizar usuarios locales a la nube: ${e.localizedMessage}")
+        }
+    }
+
+    fun sincronizarFcmToken(idUsuario: String, token: String) {
+        scope.launch {
+            try {
+                firestore?.collection("usuarios")?.document(idUsuario)
+                    ?.set(mapOf("fcmToken" to token), SetOptions.merge())?.await()
+                val entidad = daoUsuario.obtenerUsuarioPorId(idUsuario)
+                if (entidad != null) {
+                    daoUsuario.insertarOActualizarUsuario(entidad.copy(fcmToken = token))
+                }
+            } catch (e: Exception) {
+                Log.w("RepositorioAuthFirebase", "Aviso al guardar fcmToken: ${e.message}")
+            }
+        }
+    }
+
+    fun publicarNotificacionEnFirestore(
+        idUsuarioEmisor: String,
+        idUsuarioDestino: String,
+        titulo: String,
+        mensaje: String,
+        tipo: String,
+        idEntidadRelacionada: String? = null
+    ) {
+        scope.launch {
+            try {
+                val data = hashMapOf(
+                    "idUsuarioEmisor" to idUsuarioEmisor,
+                    "idUsuarioDestino" to idUsuarioDestino,
+                    "titulo" to titulo,
+                    "mensaje" to mensaje,
+                    "tipo" to tipo,
+                    "idEntidadRelacionada" to idEntidadRelacionada,
+                    "timestamp" to System.currentTimeMillis()
+                )
+                firestore?.collection("notificaciones")?.add(data)?.await()
+                Log.d("RepositorioAuthFirebase", "Notificación publicada en Firestore para $idUsuarioDestino: $titulo")
+            } catch (e: Exception) {
+                Log.w("RepositorioAuthFirebase", "Aviso al publicar notificación en Firestore: ${e.message}")
+            }
         }
     }
 }

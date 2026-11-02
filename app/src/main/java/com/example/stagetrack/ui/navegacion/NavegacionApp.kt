@@ -373,7 +373,9 @@ fun NavegacionApp(
 
                             onNavegarTransferencia = { eq ->
                                 equipoSeleccionadoParaAccion = eq
-                                pantallaActual = Pantalla.TransferenciaCustodia
+                                val esAceptacionPendiente = (eq.estadoActual == EstadoEquipo.EN_TRANSITO) && usuarioActual?.rol == RolUsuario.TECNICO
+                                qrVerificadoEnEscaneo = false
+                                pantallaActual = if (esAceptacionPendiente) Pantalla.AceptarCustodia else Pantalla.TransferenciaCustodia
                             },
                             onNavegarReporteDano = { eq ->
                                 equipoSeleccionadoParaAccion = eq

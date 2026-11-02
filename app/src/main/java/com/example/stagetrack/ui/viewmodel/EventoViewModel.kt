@@ -51,6 +51,7 @@ class EventoViewModel(
     }
 
     fun crearNuevoEvento(
+        context: android.content.Context? = null,
         nombre: String,
         cliente: String,
         fechaInicio: Long,
@@ -61,8 +62,9 @@ class EventoViewModel(
         onResultado: (Resultado<Unit>) -> Unit
     ) {
         viewModelScope.launch {
+            val idEvt = "evt_${System.currentTimeMillis()}"
             val nuevoEvento = Evento(
-                id = "evt_${System.currentTimeMillis()}",
+                id = idEvt,
                 nombre = nombre,
                 cliente = cliente,
                 fechaInicio = fechaInicio,
@@ -74,6 +76,35 @@ class EventoViewModel(
                 estado = EstadoEvento.PLANIFICADO
             )
             val res = repositorioEvento.crearNuevoEvento(nuevoEvento)
+            if (res is Resultado.Exito) {
+                tecnicosAsignados.forEach { tec ->
+                    val titulo = "📅 Convocatoria a Nuevo Evento"
+                    val mensaje = "Has sido asignado al evento \"$nombre\" en $ubicacion. Revisa tu agenda."
+                    com.example.stagetrack.datos.repositorio.GestorNotificaciones.agregarNotificacion(
+                        context = context,
+                        idUsuarioActualLogueado = supervisor.id,
+                        idUsuarioDestino = tec.id,
+                        titulo = titulo,
+                        mensaje = mensaje,
+                        tipo = com.example.stagetrack.dominio.modelo.TipoNotificacion.ASIGNACION_EVENTO,
+                        idEntidadRelacionada = idEvt
+                    )
+                    viewModelScope.launch {
+                        try {
+                            if (context != null) {
+                                com.example.stagetrack.core.notificaciones.UtilidadFcmPush.enviarNotificacionPushDirecta(
+                                    context = context,
+                                    fcmTokenDestino = "",
+                                    titulo = titulo,
+                                    mensaje = mensaje,
+                                    tipo = "ASIGNACION_EVENTO",
+                                    idUsuarioDestino = tec.id
+                                )
+                            }
+                        } catch (_: Exception) {}
+                    }
+                }
+            }
             onResultado(res)
         }
     }

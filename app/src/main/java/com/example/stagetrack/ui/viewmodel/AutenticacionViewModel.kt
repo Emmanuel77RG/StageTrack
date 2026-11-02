@@ -37,6 +37,12 @@ class AutenticacionViewModel(
             initialValue = null
         )
 
+    fun registrarFcmTokenDispositivo(idUsuario: String, token: String) {
+        if (repositorioAutenticacion is com.example.stagetrack.datos.repositorio.RepositorioAutenticacionFirebase) {
+            repositorioAutenticacion.sincronizarFcmToken(idUsuario, token)
+        }
+    }
+
     val listaUsuarios: StateFlow<List<Usuario>> = repositorioAutenticacion.obtenerTodosLosUsuarios()
         .catch { e ->
             Log.e("AutenticacionViewModel", "Error al obtener lista de usuarios: ${e.message}", e)

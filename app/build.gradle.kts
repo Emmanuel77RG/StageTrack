@@ -33,6 +33,16 @@ android {
     buildFeatures {
         compose = true
     }
+    packaging {
+        resources {
+            excludes += "META-INF/INDEX.LIST"
+            excludes += "META-INF/DEPENDENCIES"
+            excludes += "META-INF/LICENSE"
+            excludes += "META-INF/LICENSE.txt"
+            excludes += "META-INF/NOTICE"
+            excludes += "META-INF/NOTICE.txt"
+        }
+    }
 }
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
@@ -54,6 +64,7 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation("androidx.multidex:multidex:2.0.1")
+    implementation("androidx.work:work-runtime-ktx:2.10.0")
 
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
@@ -71,6 +82,7 @@ dependencies {
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
     implementation(libs.firebase.firestore)
+    implementation(libs.firebase.messaging)
     implementation(libs.kotlinx.coroutines.play.services)
 
     implementation(libs.coil.compose)
@@ -78,6 +90,7 @@ dependencies {
     implementation(libs.ktor.client.android)
     implementation(libs.androidx.exifinterface)
     implementation(libs.guava)
+    implementation("com.google.auth:google-auth-library-oauth2-http:1.24.0")
 
     testImplementation(libs.junit)
     testImplementation(libs.androidx.room.runtime)
