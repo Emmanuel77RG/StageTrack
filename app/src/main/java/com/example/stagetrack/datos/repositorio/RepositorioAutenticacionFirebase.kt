@@ -147,7 +147,10 @@ class RepositorioAutenticacionFirebase(
                             val idDestino = doc.getString("idUsuarioDestino") ?: ""
                             val idEmisor = doc.getString("idUsuarioEmisor") ?: ""
 
-                            if ((idDestino == uActualId || idDestino == "todos" || (_usuarioLocalActual.value?.rol == RolUsuario.JEFE_BODEGA && idDestino == "bodega")) && idEmisor != uActualId) {
+                            val esJefeBodega = _usuarioLocalActual.value?.rol == RolUsuario.JEFE_BODEGA
+                            val esDestinatarioValido = (idDestino == uActualId || idDestino == "todos" || (idDestino == "bodega" && esJefeBodega))
+
+                            if (esDestinatarioValido && idEmisor != uActualId) {
                                 val titulo = doc.getString("titulo") ?: "StageTrack"
                                 val mensaje = doc.getString("mensaje") ?: "Nueva actualización de inventario"
                                 val tipoStr = doc.getString("tipo") ?: "SISTEMA"
@@ -158,7 +161,7 @@ class RepositorioAutenticacionFirebase(
                                 GestorNotificaciones.agregarNotificacion(
                                     context = null,
                                     idUsuarioActualLogueado = uActualId,
-                                    idUsuarioDestino = uActualId,
+                                    idUsuarioDestino = idDestino,
                                     titulo = titulo,
                                     mensaje = mensaje,
                                     tipo = tipo,

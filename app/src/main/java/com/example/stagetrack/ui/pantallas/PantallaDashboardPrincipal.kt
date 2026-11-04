@@ -147,7 +147,7 @@ fun PantallaDashboardPrincipal(
                     context = null,
                     idUsuarioActualLogueado = usuarioActual.id,
                     idUsuarioDestino = usuarioActual.id,
-                    titulo = "📦 Recepción de Custodia Pendiente",
+                    titulo = "Recepción de Custodia Pendiente",
                     mensaje = "Tienes ${traspasosPendientes.size} equipo(s) pendiente(s) de confirmación (\"${primerPendiente.nombre}\"). Toca para aceptar.",
                     tipo = TipoNotificacion.TRANSFERENCIA_CUSTODIA,
                     idEntidadRelacionada = primerPendiente.id
@@ -168,7 +168,7 @@ fun PantallaDashboardPrincipal(
                     context = null,
                     idUsuarioActualLogueado = usuarioActual.id,
                     idUsuarioDestino = "bodega",
-                    titulo = "🔄 Devolución a Bodega Pendiente",
+                    titulo = "Devolución a Bodega Pendiente",
                     mensaje = "Tienes ${devolucionesPendientes.size} equipo(s) en proceso de devolución (\"${primerDev.nombre}\"). Toca para confirmar recepción.",
                     tipo = TipoNotificacion.DEVOLUCION_BODEGA,
                     idEntidadRelacionada = primerDev.id
@@ -917,7 +917,7 @@ private fun TarjetaEquipoAsignadoTecnico(
                     modifier = Modifier
                         .size(48.dp)
                         .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.surface)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
                         .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp)),
                     contentAlignment = Alignment.Center
                 ) {
@@ -925,8 +925,10 @@ private fun TarjetaEquipoAsignadoTecnico(
                         Image(
                             bitmap = bitmapEquipo.asImageBitmap(),
                             contentDescription = "Foto de ${equipo.nombre}",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(2.dp)
                         )
                     } else {
                         Icon(
@@ -1088,7 +1090,7 @@ private fun DashboardSupervisor(
             titulo = "Gestión de Eventos",
             descripcion = "Crear producciones y convocar técnicos",
             icono = Icons.Default.Event,
-            textoBoton = "Gestionar Eventos",
+            textoBoton = "Ver Eventos",
             onClick = onNavegarEventos,
             modifier = Modifier.weight(1f)
         )

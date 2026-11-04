@@ -25,6 +25,7 @@ import com.example.stagetrack.ui.pantallas.PantallaDashboardPrincipal
 import com.example.stagetrack.ui.pantallas.PantallaExportacionReportes
 import com.example.stagetrack.ui.pantallas.PantallaEscaneoQr
 import com.example.stagetrack.ui.pantallas.PantallaGestionEventos
+import com.example.stagetrack.ui.pantallas.PantallaDetalleEvento
 import com.example.stagetrack.ui.pantallas.PantallaGestionUsuarios
 import com.example.stagetrack.ui.pantallas.PantallaInicioSesion
 import com.example.stagetrack.ui.pantallas.PantallaInventarioEvento
@@ -149,6 +150,12 @@ fun NavegacionApp(
                             },
                             onSincronizarNube = { onResultado ->
                                 autenticacionViewModel.sincronizarUsuariosConNube(onResultado)
+                            },
+                            onCrearUsuariosEnLoteCsv = { ctx, contenido, onProgreso, onResultado ->
+                                autenticacionViewModel.crearUsuariosEnLoteCsv(ctx, contenido, onProgreso, onResultado)
+                            },
+                            onDescargarPlantillaCsv = { ctx ->
+                                autenticacionViewModel.descargarPlantillaCsv(ctx)
                             }
                         )
                     } else {
@@ -183,6 +190,7 @@ fun NavegacionApp(
                 is Pantalla.InventarioEquipos -> {
                     PantallaInventarioEquipos(
                         equipoViewModel = equipoViewModel,
+                        eventoViewModel = eventoViewModel,
                         usuarioActual = usuarioActual,
                         filtroEstadoInicial = actual.filtroEstadoInicial,
                         onVolverClick = { pantallaActual = Pantalla.InicioBodega },
@@ -228,6 +236,7 @@ fun NavegacionApp(
                             equipo = equipoObjetivo,
                             autenticacionViewModel = autenticacionViewModel,
                             equipoViewModel = equipoViewModel,
+                            eventoViewModel = eventoViewModel,
                             onVolverClick = { pantallaActual = Pantalla.InventarioEquipos() },
                             onTransferenciaExitosa = { pantallaActual = Pantalla.InventarioEquipos() }
                         )
@@ -264,18 +273,43 @@ fun NavegacionApp(
                             }
                             if (equipoEncontrado != null) {
                                 equipoSeleccionadoParaAccion = equipoEncontrado
-                                when (actual.modo) {
-                                    ModoEscaneoQr.CONSULTAR_FICHA -> {
-                                        equipoParaFichaTecnica = equipoEncontrado
-                                        pantallaActual = Pantalla.InicioBodega
+
+                                if (usuarioActual?.rol == RolUsuario.TECNICO) {
+                                    val esDestinatarioTransito = equipoEncontrado.estadoActual == EstadoEquipo.EN_TRANSITO &&
+                                            equipoEncontrado.idCustodioActual == usuarioActual?.id
+
+                                    val esCustodioActivo = equipoEncontrado.estadoActual == EstadoEquipo.EN_CUSTODIA &&
+                                            equipoEncontrado.idCustodioActual == usuarioActual?.id
+
+                                    when {
+                                        esDestinatarioTransito -> {
+                                            qrVerificadoEnEscaneo = true
+                                            pantallaActual = Pantalla.AceptarCustodia
+                                        }
+                                        esCustodioActivo -> {
+                                            pantallaActual = Pantalla.TransferenciaCustodia
+                                        }
+                                        else -> {
+                                            // Si no es el destinatario en tránsito ni el custodio activo, solo muestra la Ficha Técnica
+                                            equipoParaFichaTecnica = equipoEncontrado
+                                            pantallaActual = Pantalla.InicioBodega
+                                        }
                                     }
-                                    ModoEscaneoQr.RECEPCION_CUSTODIA -> {
-                                        val esAceptacionPendiente = (equipoEncontrado.estadoActual == EstadoEquipo.EN_TRANSITO) && usuarioActual?.rol == RolUsuario.TECNICO
-                                        qrVerificadoEnEscaneo = true
-                                        pantallaActual = if (esAceptacionPendiente) Pantalla.AceptarCustodia else Pantalla.TransferenciaCustodia
-                                    }
-                                    ModoEscaneoQr.DESPACHO_TRASPASO -> {
-                                        pantallaActual = Pantalla.TransferenciaCustodia
+                                } else {
+                                    // Para roles de Gestión (Supervisor, Jefe de Bodega, Administrador)
+                                    when (actual.modo) {
+                                        ModoEscaneoQr.CONSULTAR_FICHA -> {
+                                            equipoParaFichaTecnica = equipoEncontrado
+                                            pantallaActual = Pantalla.InicioBodega
+                                        }
+                                        ModoEscaneoQr.RECEPCION_CUSTODIA -> {
+                                            val esAceptacionPendiente = (equipoEncontrado.estadoActual == EstadoEquipo.EN_TRANSITO)
+                                            qrVerificadoEnEscaneo = true
+                                            pantallaActual = if (esAceptacionPendiente) Pantalla.AceptarCustodia else Pantalla.TransferenciaCustodia
+                                        }
+                                        ModoEscaneoQr.DESPACHO_TRASPASO -> {
+                                            pantallaActual = Pantalla.TransferenciaCustodia
+                                        }
                                     }
                                 }
                             } else {
@@ -308,7 +342,24 @@ fun NavegacionApp(
                     PantallaGestionEventos(
                         eventoViewModel = eventoViewModel,
                         autenticacionViewModel = autenticacionViewModel,
+                        equipoViewModel = equipoViewModel,
                         onVolverClick = { pantallaActual = Pantalla.InicioBodega },
+                        onVerInventarioEventoClick = { evento ->
+                            pantallaActual = Pantalla.InventarioEvento(evento.id)
+                        },
+                        onVerDetalleEventoClick = { evento ->
+                            pantallaActual = Pantalla.DetalleEvento(evento.id)
+                        }
+                    )
+                }
+
+                is Pantalla.DetalleEvento -> {
+                    PantallaDetalleEvento(
+                        idEvento = actual.idEvento,
+                        eventoViewModel = eventoViewModel,
+                        autenticacionViewModel = autenticacionViewModel,
+                        equipoViewModel = equipoViewModel,
+                        onVolverClick = { pantallaActual = Pantalla.GestionEventos },
                         onVerInventarioEventoClick = { evento ->
                             pantallaActual = Pantalla.InventarioEvento(evento.id)
                         }

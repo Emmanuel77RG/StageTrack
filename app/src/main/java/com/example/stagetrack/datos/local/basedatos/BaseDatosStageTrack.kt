@@ -28,7 +28,7 @@ import com.example.stagetrack.datos.local.entidad.EntidadUsuario
         EntidadUsuario::class,
         EntidadEvento::class
     ],
-    version = 8,
+    version = 10,
     exportSchema = false
 )
 abstract class BaseDatosStageTrack : RoomDatabase() {
@@ -189,6 +189,25 @@ abstract class BaseDatosStageTrack : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                try {
+                    db.execSQL("ALTER TABLE eventos ADD COLUMN categoria TEXT NOT NULL DEFAULT 'CONCIERTO_SHOW'")
+                    db.execSQL("ALTER TABLE eventos ADD COLUMN idsEquiposAsignadosCsv TEXT NOT NULL DEFAULT ''")
+                    db.execSQL("ALTER TABLE eventos ADD COLUMN notasMontaje TEXT DEFAULT NULL")
+                } catch (_: Exception) {}
+            }
+        }
+
+        private val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                try {
+                    db.execSQL("ALTER TABLE eventos ADD COLUMN idJefeBodega TEXT DEFAULT NULL")
+                    db.execSQL("ALTER TABLE eventos ADD COLUMN nombreJefeBodega TEXT DEFAULT NULL")
+                } catch (_: Exception) {}
+            }
+        }
+
         fun obtenerInstancia(contexto: Context): BaseDatosStageTrack {
             return INSTANCIA ?: synchronized(this) {
                 val instancia = Room.databaseBuilder(
@@ -196,7 +215,7 @@ abstract class BaseDatosStageTrack : RoomDatabase() {
                     BaseDatosStageTrack::class.java,
                     "stagetrack_db"
                 )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_1_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_1_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
                 .fallbackToDestructiveMigration()
                 .fallbackToDestructiveMigrationOnDowngrade()
                 .build()

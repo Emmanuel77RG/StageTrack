@@ -8,6 +8,7 @@ import android.util.Log
 import android.view.ViewGroup
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.core.AspectRatio
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
@@ -25,8 +26,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -38,8 +41,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -114,6 +121,7 @@ fun CameraPreview(
             modifier = modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
+                .navigationBarsPadding()
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
@@ -127,6 +135,7 @@ fun CameraPreview(
             Image(
                 bitmap = fotoPreviewBitmap!!.asImageBitmap(),
                 contentDescription = "Evidencia de daño",
+                contentScale = ContentScale.Fit,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
@@ -175,6 +184,7 @@ fun CameraPreview(
                 factory = { ctx ->
                     val previewView = PreviewView(ctx).apply {
                         implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+                        scaleType = PreviewView.ScaleType.FIT_CENTER
                         layoutParams = ViewGroup.LayoutParams(
                             ViewGroup.LayoutParams.MATCH_PARENT,
                             ViewGroup.LayoutParams.MATCH_PARENT
@@ -184,11 +194,15 @@ fun CameraPreview(
                     val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
                     cameraProviderFuture.addListener({
                         val cameraProvider = cameraProviderFuture.get()
-                        val preview = Preview.Builder().build().also {
-                            it.setSurfaceProvider(previewView.surfaceProvider)
-                        }
+                        val preview = Preview.Builder()
+                            .setTargetAspectRatio(AspectRatio.RATIO_4_3)
+                            .build()
+                            .also {
+                                it.setSurfaceProvider(previewView.surfaceProvider)
+                            }
 
                         imageCapture = ImageCapture.Builder()
+                            .setTargetAspectRatio(AspectRatio.RATIO_4_3)
                             .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
                             .build()
 
@@ -212,55 +226,75 @@ fun CameraPreview(
                 modifier = Modifier.fillMaxSize()
             )
 
-            Row(
+            // Contenedor con degradado inferior y protección de insets del sistema (3 botones / gestos)
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.BottomCenter)
-                    .padding(24.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.75f)
+                            )
+                        )
+                    )
+                    .navigationBarsPadding()
+                    .padding(24.dp)
             ) {
-                OutlinedButton(onClick = onCancelar) {
-                    Text("Cancelar")
-                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedButton(
+                        onClick = onCancelar,
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Text("Cancelar", fontWeight = FontWeight.Bold)
+                    }
 
-                Button(onClick = {
-                    val capture = imageCapture ?: return@Button
-                    val mainExecutor: Executor = ContextCompat.getMainExecutor(context)
+                    Button(onClick = {
+                        val capture = imageCapture ?: return@Button
+                        val mainExecutor: Executor = ContextCompat.getMainExecutor(context)
 
-                    capture.takePicture(
-                        mainExecutor,
-                        object : ImageCapture.OnImageCapturedCallback() {
-                            override fun onCaptureSuccess(image: ImageProxy) {
-                                val rotationDegrees = image.imageInfo.rotationDegrees
-                                val buffer = image.planes[0].buffer
-                                val bytes = ByteArray(buffer.remaining())
-                                buffer.get(bytes)
-                                image.close()
+                        capture.takePicture(
+                            mainExecutor,
+                            object : ImageCapture.OnImageCapturedCallback() {
+                                override fun onCaptureSuccess(image: ImageProxy) {
+                                    val rotationDegrees = image.imageInfo.rotationDegrees
+                                    val buffer = image.planes[0].buffer
+                                    val bytes = ByteArray(buffer.remaining())
+                                    buffer.get(bytes)
+                                    image.close()
 
-                                val rawBitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                                val rotatedBitmap = if (rotationDegrees != 0 && rawBitmap != null) {
-                                    val matrix = android.graphics.Matrix().apply { postRotate(rotationDegrees.toFloat()) }
-                                    Bitmap.createBitmap(rawBitmap, 0, 0, rawBitmap.width, rawBitmap.height, matrix, true)
-                                } else {
-                                    rawBitmap
+                                    val rawBitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                                    val rotatedBitmap = if (rotationDegrees != 0 && rawBitmap != null) {
+                                        val matrix = android.graphics.Matrix().apply { postRotate(rotationDegrees.toFloat()) }
+                                        Bitmap.createBitmap(rawBitmap, 0, 0, rawBitmap.width, rawBitmap.height, matrix, true)
+                                    } else {
+                                        rawBitmap
+                                    }
+
+                                    val stream = java.io.ByteArrayOutputStream()
+                                    rotatedBitmap?.compress(Bitmap.CompressFormat.JPEG, 90, stream)
+                                    val finalBytes = stream.toByteArray()
+                                    val hashCalculado = UtilidadHash.calcularSha256(finalBytes)
+
+                                    fotoPreviewBitmap = rotatedBitmap
+                                    hashSha256Calculado = hashCalculado
                                 }
 
-                                val stream = java.io.ByteArrayOutputStream()
-                                rotatedBitmap?.compress(Bitmap.CompressFormat.JPEG, 90, stream)
-                                val finalBytes = stream.toByteArray()
-                                val hashCalculado = UtilidadHash.calcularSha256(finalBytes)
-
-                                fotoPreviewBitmap = rotatedBitmap
-                                hashSha256Calculado = hashCalculado
+                                override fun onError(exception: ImageCaptureException) {
+                                    Log.e("CameraPreview", "Error capturando imagen: ${exception.message}", exception)
+                                }
                             }
-
-                            override fun onError(exception: ImageCaptureException) {
-                                Log.e("CameraPreview", "Error capturando imagen: ${exception.message}", exception)
-                            }
-                        }
-                    )
-                }) {
-                    Text("Tomar Foto")
+                        )
+                    }) {
+                        Text("Tomar Foto", fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }

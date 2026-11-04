@@ -17,8 +17,10 @@ import com.example.stagetrack.dominio.repositorio.RepositorioAlmacenamiento
 import com.example.stagetrack.dominio.repositorio.RepositorioCustodia
 import com.example.stagetrack.dominio.repositorio.RepositorioEquipo
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -31,6 +33,13 @@ class EquipoViewModel(
     private val repositorioCustodia: RepositorioCustodia,
     private val repositorioAlmacenamiento: RepositorioAlmacenamiento = RepositorioAlmacenamientoSupabase()
 ) : ViewModel() {
+
+    private val _eventoFiltroSeleccionadoId = MutableStateFlow<String?>(null)
+    val eventoFiltroSeleccionadoId: StateFlow<String?> = _eventoFiltroSeleccionadoId.asStateFlow()
+
+    fun seleccionarEventoFiltro(idEvento: String?) {
+        _eventoFiltroSeleccionadoId.value = idEvento
+    }
 
     val listaEquipos: StateFlow<List<Equipo>> = repositorioEquipo.obtenerTodosLosEquipos()
         .catch { e ->
@@ -160,7 +169,7 @@ class EquipoViewModel(
                 val nombreEquipo = equipoActual?.nombre ?: "Equipo"
                 val serieEquipo = equipoActual?.numeroSerie ?: idEquipo
 
-                val titulo = "📦 Transferencia de Custodia Recibida"
+                val titulo = "Transferencia de Custodia Recibida"
                 val mensaje = "Se te ha asignado la custodia del equipo \"$nombreEquipo\" (N/S: $serieEquipo). Revisa tu panel para confirmar recepción."
 
                 com.example.stagetrack.datos.repositorio.GestorNotificaciones.agregarNotificacion(
@@ -259,6 +268,7 @@ class EquipoViewModel(
         latitudGps: Double? = null,
         longitudGps: Double? = null,
         notas: String? = null,
+        idJefeBodegaDestino: String? = null,
         onResultado: (Resultado<Unit>) -> Unit
     ) {
         viewModelScope.launch {
@@ -267,11 +277,13 @@ class EquipoViewModel(
             val base64Evidencia = android.util.Base64.encodeToString(bytesFotografia, android.util.Base64.NO_WRAP)
             val hashSha256 = UtilidadHash.calcularSha256(bytesFotografia)
 
+            val idDestinoFinal = idJefeBodegaDestino?.ifBlank { null } ?: "bodega"
+
             val transferencia = TransferenciaCustodia(
                 id = idTrans,
                 idEquipo = idEquipo,
                 idUsuarioEmisor = idTecnicoEmisor,
-                idUsuarioReceptor = "bodega",
+                idUsuarioReceptor = idDestinoFinal,
                 fechaHoraTimestamp = System.currentTimeMillis(),
                 uriFotografiaEvidencia = base64Evidencia,
                 hashSha256Evidencia = hashSha256,
@@ -292,20 +304,20 @@ class EquipoViewModel(
                 val equipoActual = listaEquipos.value.find { it.id == idEquipo }
                 val nombreEquipo = equipoActual?.nombre ?: "Equipo"
 
-                val titulo = "🔄 Devolución a Bodega Recibida"
+                val titulo = "Devolución a Bodega Recibida"
                 val mensaje = "El técnico $nombreTecnicoEmisor ha devuelto el equipo \"$nombreEquipo\". Confirma recepción en Bodega."
 
                 com.example.stagetrack.datos.repositorio.GestorNotificaciones.agregarNotificacion(
                     context = null,
                     idUsuarioActualLogueado = idTecnicoEmisor,
-                    idUsuarioDestino = "bodega",
+                    idUsuarioDestino = idDestinoFinal,
                     titulo = titulo,
                     mensaje = mensaje,
                     tipo = com.example.stagetrack.dominio.modelo.TipoNotificacion.DEVOLUCION_BODEGA,
                     idEntidadRelacionada = idEquipo
                 )
 
-                // Despachar notificación Push FCM en segundo plano dirigida al Tópico de Bodega
+                // Despachar notificación Push FCM en segundo plano dirigida al destinatario
                 viewModelScope.launch {
                     try {
                         val ctx = com.example.stagetrack.datos.repositorio.GestorNotificaciones.contextAplicacion
@@ -316,7 +328,7 @@ class EquipoViewModel(
                                 titulo = titulo,
                                 mensaje = mensaje,
                                 tipo = "DEVOLUCION_BODEGA",
-                                idUsuarioDestino = "bodega"
+                                idUsuarioDestino = idDestinoFinal
                             )
                         }
                     } catch (_: Exception) {}

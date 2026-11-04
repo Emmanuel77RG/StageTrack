@@ -21,6 +21,7 @@ sealed class Pantalla(val ruta: String) {
     data object PrimerInicioSesion : Pantalla("primer_inicio_sesion")
     data object AceptarCustodia : Pantalla("aceptar_custodia")
     data class InventarioEvento(val idEvento: String) : Pantalla("inventario_evento")
+    data class DetalleEvento(val idEvento: String) : Pantalla("detalle_evento")
     data object AuditoriaGlobal : Pantalla("auditoria_global")
     data object ExportacionReportes : Pantalla("exportacion_reportes")
 }

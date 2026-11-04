@@ -32,6 +32,19 @@ class ServicioMensajeriaFirebase : FirebaseMessagingService() {
         }
 
         val idDestino = remoteMessage.data["idUsuarioDestino"] ?: "todos"
+        val usuarioActualId = GestorNotificaciones.idUsuarioLogueadoActual
+        val usuarioActualRol = GestorNotificaciones.usuarioRolLogueadoActual
+        val esJefeBodega = usuarioActualRol == com.example.stagetrack.dominio.modelo.RolUsuario.JEFE_BODEGA
+
+        // Omitir dibujado de notificación nativa si la notificación va dirigida a otra persona o rol
+        val esParaEsteDispositivo = (usuarioActualId != null && usuarioActualId == idDestino) ||
+                (idDestino == "todos") ||
+                (idDestino == "bodega" && esJefeBodega)
+
+        if (!esParaEsteDispositivo) {
+            Log.d("ServicioFirebase", "Notificación Push ignorada para idDestino ($idDestino) en este dispositivo.")
+            return
+        }
 
         // Agregar al historial in-app de forma silenciosa
         GestorNotificaciones.agregarNotificacion(

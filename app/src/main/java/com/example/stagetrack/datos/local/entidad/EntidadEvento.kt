@@ -11,11 +11,16 @@ data class EntidadEvento(
     @PrimaryKey val id: String,
     val nombre: String,
     val cliente: String,
+    val categoria: String = "CONCIERTO_SHOW",
     val fechaInicio: Long,
     val fechaFin: Long,
     val ubicacion: String,
     val idSupervisor: String,
     val nombreSupervisor: String,
-    val idsTecnicosAsignadosCsv: String,
+    val idJefeBodega: String? = null,
+    val nombreJefeBodega: String? = null,
+    val idsTecnicosAsignadosCsv: String = "",
+    val idsEquiposAsignadosCsv: String = "",
+    val notasMontaje: String? = null,
     val estado: String
 )

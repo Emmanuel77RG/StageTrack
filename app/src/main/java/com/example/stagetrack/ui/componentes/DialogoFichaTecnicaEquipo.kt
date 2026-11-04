@@ -130,11 +130,11 @@ fun DialogoFichaTecnicaEquipo(
                     }
                 }
 
-                // Fotografía de Evidencia HD
+                // Fotografía de Evidencia HD (Respeta proporciones reales)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(160.dp)
+                        .height(190.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant)
                         .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp)),
@@ -144,8 +144,10 @@ fun DialogoFichaTecnicaEquipo(
                         Image(
                             bitmap = bitmapEquipo.asImageBitmap(),
                             contentDescription = "Fotografía de ${equipo.nombre}",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(8.dp)
                         )
                     } else {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -183,12 +185,15 @@ fun DialogoFichaTecnicaEquipo(
                         ElementoDetalleFicha("Ubicación Actual", equipo.ubicacionActual)
 
                         if (!equipo.nombreCustodioActual.isNullOrBlank()) {
-                            Spacer(modifier = Modifier.height(4.dp))
-                            ElementoDetalleFicha(
-                                titulo = "Custodio Responsable",
-                                valor = equipo.nombreCustodioActual,
-                                esResaltado = true
-                            )
+                            val esTransito = equipo.estadoActual == EstadoEquipo.EN_TRANSITO
+                            if (!esTransito || esGestionador) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                ElementoDetalleFicha(
+                                    titulo = if (esTransito) "En Tránsito a" else "Custodio Responsable",
+                                    valor = equipo.nombreCustodioActual,
+                                    esResaltado = true
+                                )
+                            }
                         }
                     }
                 }
@@ -224,59 +229,60 @@ fun DialogoFichaTecnicaEquipo(
         },
         confirmButton = {
             val esCustodiaPendiente = equipo.estadoActual == EstadoEquipo.EN_TRANSITO
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                if (esGestionador && equipo.estadoActual != EstadoEquipo.DADO_DE_BAJA && onDarDeBajaClick != null) {
-                    OutlinedButton(
-                        onClick = onDarDeBajaClick,
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.error
-                        )
-                    ) {
-                        Text("Dar de Baja", style = MaterialTheme.typography.labelMedium)
+                // Fila Superior: Botones de Acción de Estado
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (esGestionador && equipo.estadoActual != EstadoEquipo.DADO_DE_BAJA && onDarDeBajaClick != null) {
+                        OutlinedButton(
+                            onClick = onDarDeBajaClick,
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("Dar de Baja", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, maxLines = 1)
+                        }
+                    }
+
+                    if (!esDanado && !esCustodiaPendiente && (esCustodioActual || esGestionador) && onReportarDanoClick != null) {
+                        OutlinedButton(
+                            onClick = onReportarDanoClick,
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Dañado", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, maxLines = 1)
+                        }
                     }
                 }
 
-                if (!esDanado && !esCustodiaPendiente && (esCustodioActual || esGestionador) && onReportarDanoClick != null) {
-                    OutlinedButton(
-                        onClick = onReportarDanoClick,
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.error
-                        )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Warning,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Dañado", style = MaterialTheme.typography.labelMedium)
-                    }
-                }
-
-                if (!esDanado && (esCustodioActual || esGestionador) && onTransferirCustodiaClick != null) {
-                    Button(onClick = onTransferirCustodiaClick) {
-                        Icon(
-                            imageVector = Icons.Default.Build,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            if (esCustodiaPendiente) "Recibir" else "Traspasar",
-                            style = MaterialTheme.typography.labelMedium
-                        )
-                    }
+                // Fila Inferior: Botón Cerrar abarcando todo el ancho combinado
+                OutlinedButton(
+                    onClick = onDescartar,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Cerrar", fontWeight = FontWeight.Bold)
                 }
             }
         },
-        dismissButton = {
-            TextButton(onClick = onDescartar) {
-                Text("Cerrar")
-            }
-        }
+        dismissButton = null
     )
 }
 

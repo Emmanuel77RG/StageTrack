@@ -73,7 +73,7 @@ fun BoxScope.InsigniaSha256(
             )
             Spacer(modifier = Modifier.width(4.dp))
             Text(
-                text = "SHA-256 ✓",
+                text = "SHA-256",
                 color = Color.White,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold

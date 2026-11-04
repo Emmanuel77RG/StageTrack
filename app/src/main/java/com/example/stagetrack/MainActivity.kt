@@ -124,6 +124,8 @@ class MainActivity : ComponentActivity() {
         // Suscribir el dispositivo al Tópico Push del usuario para notificaciones con app cerrada
         lifecycleScope.launch {
             autenticacionViewModel.usuarioActual.collect { usr ->
+                com.example.stagetrack.datos.repositorio.GestorNotificaciones.idUsuarioLogueadoActual = usr?.id
+                com.example.stagetrack.datos.repositorio.GestorNotificaciones.usuarioRolLogueadoActual = usr?.rol
                 if (usr != null) {
                     try {
                         val fcm = com.google.firebase.messaging.FirebaseMessaging.getInstance()

@@ -15,6 +15,8 @@ object GestorNotificaciones {
 
     var repositorioAuthFirebase: RepositorioAutenticacionFirebase? = null
     var contextAplicacion: Context? = null
+    var idUsuarioLogueadoActual: String? = null
+    var usuarioRolLogueadoActual: com.example.stagetrack.dominio.modelo.RolUsuario? = null
 
     private val _notificaciones = MutableStateFlow<List<NotificacionApp>>(emptyList())
     val notificaciones: StateFlow<List<NotificacionApp>> = _notificaciones.asStateFlow()
@@ -35,9 +37,22 @@ object GestorNotificaciones {
             tipo = tipo,
             idEntidadRelacionada = idEntidadRelacionada
         )
-        _notificaciones.value = listOf(nuevaNotif) + _notificaciones.value
 
-        // Si se emitió una nueva notificación para otro usuario, publicarla a Firestore en tiempo real
+        val idUsuarioLocal = idUsuarioLogueadoActual ?: idUsuarioActualLogueado
+        val esJefeBodega = usuarioRolLogueadoActual == com.example.stagetrack.dominio.modelo.RolUsuario.JEFE_BODEGA
+
+        val esParaEsteUsuarioLocal = idUsuarioLocal != null && (
+            idUsuarioLocal == idUsuarioDestino ||
+            (idUsuarioDestino == "bodega" && esJefeBodega) ||
+            idUsuarioDestino == "todos"
+        )
+
+        // Agregar al historial in-app local ÚNICAMENTE si la notificación pertenece a este usuario activo
+        if (esParaEsteUsuarioLocal) {
+            _notificaciones.value = listOf(nuevaNotif) + _notificaciones.value
+        }
+
+        // Si la notificación es enviada por este usuario HACIA OTRO usuario, publicarla en Firestore
         if (idUsuarioActualLogueado != null && idUsuarioActualLogueado != idUsuarioDestino) {
             repositorioAuthFirebase?.publicarNotificacionEnFirestore(
                 idUsuarioEmisor = idUsuarioActualLogueado,
@@ -50,7 +65,10 @@ object GestorNotificaciones {
         }
 
         // Solo mostrar la notificación nativa del sistema si este dispositivo pertenece al destinatario
-        val esParaEsteDispositivo = idUsuarioActualLogueado == null || idUsuarioActualLogueado == idUsuarioDestino
+        val esParaEsteDispositivo = idUsuarioActualLogueado == null ||
+                idUsuarioActualLogueado == idUsuarioDestino ||
+                (idUsuarioDestino == "bodega" && esJefeBodega)
+
         if (context != null && esParaEsteDispositivo) {
             val idNum = (nuevaNotif.fechaTimestamp % 100000).toInt()
             UtilidadNotificaciones.mostrarNotificacionSistema(
@@ -69,8 +87,9 @@ object GestorNotificaciones {
     }
 
     fun marcarTodasComoLeidas(idUsuario: String) {
+        val esJefeBodega = usuarioRolLogueadoActual == com.example.stagetrack.dominio.modelo.RolUsuario.JEFE_BODEGA
         _notificaciones.value = _notificaciones.value.map { n ->
-            if (n.idUsuarioDestino == idUsuario || n.idUsuarioDestino == "bodega" || n.idUsuarioDestino == "todos") n.copy(leida = true) else n
+            if (n.idUsuarioDestino == idUsuario || (n.idUsuarioDestino == "bodega" && esJefeBodega) || n.idUsuarioDestino == "todos") n.copy(leida = true) else n
         }
     }
 }

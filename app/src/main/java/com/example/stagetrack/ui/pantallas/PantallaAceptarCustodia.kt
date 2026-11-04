@@ -27,6 +27,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.QrCodeScanner
@@ -128,20 +129,6 @@ fun PantallaAceptarCustodia(
                     )
 
                     OutlinedButton(
-                        onClick = {
-                            qrVerificado = true
-                            mensajeError = null
-                            mostrandoEscanerQr = false
-                        },
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.primary
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("⚡ Simular Escaneo Exitoso (Pruebas)")
-                    }
-
-                    OutlinedButton(
                         onClick = { mostrandoEscanerQr = false },
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -216,7 +203,7 @@ fun PantallaAceptarCustodia(
                                     modifier = Modifier
                                         .size(64.dp)
                                         .clip(RoundedCornerShape(8.dp))
-                                        .background(MaterialTheme.colorScheme.surface)
+                                        .background(MaterialTheme.colorScheme.surfaceVariant)
                                         .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp)),
                                     contentAlignment = Alignment.Center
                                 ) {
@@ -224,8 +211,10 @@ fun PantallaAceptarCustodia(
                                         Image(
                                             bitmap = bitmapEquipo.asImageBitmap(),
                                             contentDescription = "Foto de ${equipo.nombre}",
-                                            contentScale = ContentScale.Crop,
-                                            modifier = Modifier.fillMaxSize()
+                                            contentScale = ContentScale.Fit,
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .padding(2.dp)
                                         )
                                     } else {
                                         Icon(

@@ -1,26 +1,14 @@
 package com.example.stagetrack.ui.pantallas
 
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.filled.Inventory2
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import java.io.File
-import com.example.stagetrack.core.imagen.UtilidadImagen
-import com.example.stagetrack.core.imagen.recordarBitmapEquipo
-import com.example.stagetrack.core.ubicacion.UtilidadUbicacionGps
-import com.example.stagetrack.dominio.modelo.RolUsuario
-import com.example.stagetrack.ui.componentes.InsigniaSha256
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -29,17 +17,23 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Inventory2
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -55,14 +49,26 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.stagetrack.core.comun.Resultado
+import com.example.stagetrack.core.imagen.UtilidadImagen
+import com.example.stagetrack.core.imagen.recordarBitmapEquipo
+import com.example.stagetrack.core.ubicacion.UtilidadUbicacionGps
 import com.example.stagetrack.dominio.modelo.Equipo
+import com.example.stagetrack.dominio.modelo.RolUsuario
+import com.example.stagetrack.dominio.modelo.Usuario
+import com.example.stagetrack.ui.componentes.AvatarUsuario
 import com.example.stagetrack.ui.componentes.CameraPreview
+import com.example.stagetrack.ui.componentes.InsigniaSha256
 import com.example.stagetrack.ui.viewmodel.AutenticacionViewModel
 import com.example.stagetrack.ui.viewmodel.EquipoViewModel
+import com.example.stagetrack.ui.viewmodel.EventoViewModel
 import java.io.ByteArrayOutputStream
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -71,14 +77,21 @@ fun PantallaTransferenciaCustodia(
     equipo: Equipo,
     autenticacionViewModel: AutenticacionViewModel,
     equipoViewModel: EquipoViewModel,
+    eventoViewModel: EventoViewModel? = null,
     onVolverClick: () -> Unit,
     onTransferenciaExitosa: () -> Unit
 ) {
     val usuarioEmisor by autenticacionViewModel.usuarioActual.collectAsState()
     val listaUsuarios by autenticacionViewModel.listaUsuarios.collectAsState()
+    val listaEventos by eventoViewModel?.listaEventos?.collectAsState() ?: remember { mutableStateOf(emptyList()) }
     val context = LocalContext.current
 
+    val eventoActual = remember(listaEventos, equipo) {
+        listaEventos.find { it.idsEquiposAsignados.contains(equipo.id) || equipo.ubicacionActual.contains(it.nombre, ignoreCase = true) }
+    }
+
     var idReceptorSeleccionado by remember { mutableStateOf("") }
+    var textoBusquedaTecnico by remember { mutableStateOf("") }
     var notas by remember { mutableStateOf("") }
     var mostrandoCamara by remember { mutableStateOf(false) }
     var fotoBitmap by remember { mutableStateOf<Bitmap?>(null) }
@@ -151,7 +164,7 @@ fun PantallaTransferenciaCustodia(
                                 modifier = Modifier
                                     .size(56.dp)
                                     .clip(RoundedCornerShape(8.dp))
-                                    .background(MaterialTheme.colorScheme.surface)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
                                     .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp)),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -159,8 +172,10 @@ fun PantallaTransferenciaCustodia(
                                     Image(
                                         bitmap = bitmapEquipo.asImageBitmap(),
                                         contentDescription = "Foto de ${equipo.nombre}",
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier.fillMaxSize()
+                                        contentScale = ContentScale.Fit,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(2.dp)
                                     )
                                 } else {
                                     Icon(
@@ -201,96 +216,72 @@ fun PantallaTransferenciaCustodia(
                     fontWeight = FontWeight.Bold
                 )
 
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // Opción simplificada de Devolución a Bodega
-                    val esBodegaSeleccionada = idReceptorSeleccionado == "bodega"
-                    Card(
-                        onClick = { idReceptorSeleccionado = "bodega" },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (esBodegaSeleccionada)
-                                MaterialTheme.colorScheme.primaryContainer
-                            else
-                                MaterialTheme.colorScheme.surfaceVariant
-                        )
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(14.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column {
-                                Text(
-                                    text = "Devolver a Bodega Principal",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (esBodegaSeleccionada) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = "Iniciar proceso de retorno de equipo a inventario",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = if (esBodegaSeleccionada) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            if (esBodegaSeleccionada) {
-                                Icon(
-                                    imageVector = Icons.Default.Check,
-                                    contentDescription = "Seleccionado",
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            }
+                // Receptores válidos filtrados strictly por la cuadrilla de técnicos del evento (ordenados alfabéticamente)
+                val receptoresValidos = remember(eventoActual, listaUsuarios, usuarioEmisor) {
+                    val listaFiltrada = if (eventoActual != null) {
+                        listaUsuarios.filter { usuario ->
+                            usuario.id != usuarioEmisor?.id &&
+                            usuario.activo &&
+                            usuario.rol == RolUsuario.TECNICO &&
+                            usuario.id in eventoActual.idsTecnicosAsignados
+                        }
+                    } else {
+                        listaUsuarios.filter {
+                            it.id != usuarioEmisor?.id &&
+                            it.activo &&
+                            it.rol == RolUsuario.TECNICO
                         }
                     }
+                    listaFiltrada.sortedBy { it.nombre.lowercase() }
+                }
 
-                    // Receptores individuales (excluyendo encargados de bodega, administradores generales y supervisores)
-                    val receptoresValidos = listaUsuarios.filter {
-                        it.id != usuarioEmisor?.id &&
-                        it.activo &&
-                        it.rol != RolUsuario.JEFE_BODEGA &&
-                        it.rol != RolUsuario.ADMINISTRADOR_GENERAL &&
-                        it.rol != RolUsuario.SUPERVISOR
+                val receptoresFiltrados = remember(receptoresValidos, textoBusquedaTecnico) {
+                    if (textoBusquedaTecnico.isBlank()) {
+                        receptoresValidos
+                    } else {
+                        receptoresValidos.filter {
+                            it.nombre.contains(textoBusquedaTecnico, ignoreCase = true) ||
+                            it.correo.contains(textoBusquedaTecnico, ignoreCase = true)
+                        }
                     }
-                    receptoresValidos.forEach { receptor ->
-                        val seleccionado = idReceptorSeleccionado == receptor.id
-                        Card(
-                            onClick = { idReceptorSeleccionado = receptor.id },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (seleccionado)
-                                    MaterialTheme.colorScheme.secondaryContainer
-                                else
-                                    MaterialTheme.colorScheme.surfaceVariant
+                }
+
+                if (receptoresValidos.size > 3) {
+                    OutlinedTextField(
+                        value = textoBusquedaTecnico,
+                        onValueChange = { textoBusquedaTecnico = it },
+                        placeholder = { Text("Buscar técnico por nombre o correo...") },
+                        leadingIcon = { Icon(imageVector = Icons.Default.Search, contentDescription = null) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val esEmisorBodega = usuarioEmisor?.rol == RolUsuario.JEFE_BODEGA
+
+                    // Opción simplificada de Devolución a Bodega (Oculta si el emisor ya es Jefe de Bodega)
+                    if (!esEmisorBodega) {
+                        ItemFilaBodegaAsana(
+                            seleccionado = idReceptorSeleccionado == "bodega",
+                            onSeleccionar = { idReceptorSeleccionado = "bodega" }
+                        )
+                    }
+
+                    if (receptoresFiltrados.isEmpty()) {
+                        Text(
+                            text = if (receptoresValidos.isEmpty()) "No hay técnicos asignados a este evento disponibles." else "No se encontraron técnicos con esa búsqueda.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                    } else {
+                        receptoresFiltrados.forEach { receptor ->
+                            ItemFilaTecnicoAsana(
+                                usuario = receptor,
+                                seleccionado = idReceptorSeleccionado == receptor.id,
+                                onSeleccionar = { idReceptorSeleccionado = receptor.id }
                             )
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(12.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column {
-                                    Text(
-                                        text = receptor.nombre,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = receptor.correo,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                if (seleccionado) {
-                                    Icon(
-                                        imageVector = Icons.Default.Check,
-                                        contentDescription = "Seleccionado",
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-                            }
                         }
                     }
                 }
@@ -310,14 +301,22 @@ fun PantallaTransferenciaCustodia(
                 )
 
                 if (fotoBitmap != null && hashSha256Foto != null) {
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Box(modifier = Modifier.fillMaxWidth()) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.Center
+                        ) {
                             Image(
                                 bitmap = fotoBitmap!!.asImageBitmap(),
                                 contentDescription = "Foto evidencia",
+                                contentScale = ContentScale.Fit,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(200.dp)
+                                    .padding(6.dp)
                             )
                             InsigniaSha256(hashSha256 = hashSha256Foto!!)
                         }
@@ -361,7 +360,8 @@ fun PantallaTransferenciaCustodia(
                                 bytesFotografia = bytesFoto!!,
                                 latitudGps = lat,
                                 longitudGps = lng,
-                                notas = notas.ifBlank { null }
+                                notas = notas.ifBlank { null },
+                                idJefeBodegaDestino = eventoActual?.idJefeBodega
                             ) { resultado ->
                                 cargando = false
                                 when (resultado) {
@@ -400,6 +400,188 @@ fun PantallaTransferenciaCustodia(
                     )
                 }
             }
+        }
+    }
+}
+
+/**
+ * Item de Fila para Selección de Técnico en Transferencia de Custodia estilo Asana / Monday.
+ */
+@Composable
+private fun ItemFilaTecnicoAsana(
+    usuario: Usuario,
+    seleccionado: Boolean,
+    onSeleccionar: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onSeleccionar() },
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (seleccionado)
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+            else
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        ),
+        border = if (seleccionado)
+            BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+        else null
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AvatarUsuario(
+                    urlFotografia = usuario.urlFotografia,
+                    nombreUsuario = usuario.nombre,
+                    tamano = 42.dp
+                )
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column {
+                    Text(
+                        text = usuario.nombre,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = usuario.correo,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            FilterChip(
+                selected = seleccionado,
+                onClick = onSeleccionar,
+                label = {
+                    Text(
+                        text = "Técnico",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                leadingIcon = if (seleccionado) {
+                    {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                } else null
+            )
+        }
+    }
+}
+
+/**
+ * Item de Fila para Opción de Devolución a Bodega estilo Asana / Monday.
+ */
+@Composable
+private fun ItemFilaBodegaAsana(
+    seleccionado: Boolean,
+    onSeleccionar: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onSeleccionar() },
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (seleccionado)
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+            else
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        ),
+        border = if (seleccionado)
+            BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+        else null
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Inventory2,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column {
+                    Text(
+                        text = "Devolver a Bodega Principal",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "Retorno de activo al inventario general",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            FilterChip(
+                selected = seleccionado,
+                onClick = onSeleccionar,
+                label = {
+                    Text(
+                        text = "Bodega",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                leadingIcon = if (seleccionado) {
+                    {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                } else null
+            )
         }
     }
 }

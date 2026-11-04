@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -142,33 +141,6 @@ fun DialogoAceptarDevolucionQr(
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall
                     )
-                }
-
-                Button(
-                    onClick = {
-                        cargando = true
-                        mensajeError = null
-                        equipoViewModel.confirmarDevolucionEnBodega(equipo.id) { res ->
-                            cargando = false
-                            when (res) {
-                                is Resultado.Exito -> {
-                                    Toast.makeText(
-                                        context,
-                                        "¡Devolución confirmada manualmente! Equipo reingresado a Bodega.",
-                                        Toast.LENGTH_LONG
-                                    ).show()
-                                    onDevolucionExitosa()
-                                }
-                                is Resultado.Error -> {
-                                    mensajeError = res.mensaje ?: res.excepcion.localizedMessage
-                                }
-                                is Resultado.Cargando -> {}
-                            }
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Confirmar Devolución Manualmente", fontWeight = FontWeight.Bold)
                 }
             }
         },

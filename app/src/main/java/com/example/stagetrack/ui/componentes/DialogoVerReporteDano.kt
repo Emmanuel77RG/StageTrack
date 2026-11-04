@@ -168,16 +168,23 @@ fun DialogoVerReporteDano(
 
                         Card(
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
                         ) {
-                            Box(modifier = Modifier.fillMaxWidth()) {
+                            Box(
+                                modifier = Modifier.fillMaxWidth(),
+                                contentAlignment = Alignment.Center
+                            ) {
                                 SubcomposeAsyncImage(
                                     model = ultimoReporte.uriFotografiaEvidencia,
                                     contentDescription = "Evidencia de daño",
-                                    contentScale = ContentScale.Crop,
+                                    contentScale = ContentScale.Fit,
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .height(200.dp)
+                                        .padding(8.dp)
                                         .clip(RoundedCornerShape(12.dp)),
                                     loading = {
                                         Box(

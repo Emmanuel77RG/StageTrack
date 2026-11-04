@@ -1,10 +1,12 @@
 package com.example.stagetrack.ui.pantallas
 
+import android.content.Context
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +22,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -27,18 +30,26 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.LockReset
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -46,6 +57,7 @@ import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -58,6 +70,8 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import com.example.stagetrack.ui.viewmodel.CredencialUsuarioGenerada
+import com.example.stagetrack.ui.viewmodel.LoteResultadoCreacion
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -102,13 +116,26 @@ fun PantallaGestionUsuarios(
         tamanoVistaPx: Float,
         onResultado: (Resultado<String>) -> Unit
     ) -> Unit,
-    onSincronizarNube: ((Resultado<Int>) -> Unit) -> Unit = { _ -> }
+    onSincronizarNube: ((Resultado<Int>) -> Unit) -> Unit = { _ -> },
+    onCrearUsuariosEnLoteCsv: (
+        context: Context,
+        contenidoCsv: String,
+        onProgreso: (actual: Int, total: Int, correoActual: String) -> Unit,
+        onResultado: (Resultado<LoteResultadoCreacion>) -> Unit
+    ) -> Unit = { _, _, _, _ -> },
+    onDescargarPlantillaCsv: (context: Context) -> String = { "" }
 ) {
+    val context = LocalContext.current
     var mostrarDialogoCrear by remember { mutableStateOf(false) }
+    var mostrarDialogoCreacionMasiva by remember { mutableStateOf(false) }
+    var estadoProgresoLote by remember { mutableStateOf<Triple<Int, Int, String>?>(null) }
+    var resultadoLote by remember { mutableStateOf<LoteResultadoCreacion?>(null) }
     var usuarioParaEditar by remember { mutableStateOf<Usuario?>(null) }
     var usuarioParaRestablecer by remember { mutableStateOf<Usuario?>(null) }
     var usuarioCreadoExitoso by remember { mutableStateOf<Pair<Usuario, String>?>(null) }
     var mensajeSnack by remember { mutableStateOf<String?>(null) }
+    var textoBusqueda by remember { mutableStateOf("") }
+    var rolFiltroSeleccionado by remember { mutableStateOf<RolUsuario?>(null) }
     var cargandoSubidaFotoId by remember { mutableStateOf<String?>(null) }
     var uriAjustarImagen by remember { mutableStateOf<Uri?>(null) }
     var idUsuarioAjustandoFoto by remember { mutableStateOf<String?>(null) }
@@ -140,6 +167,16 @@ fun PantallaGestionUsuarios(
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = { mostrarDialogoCreacionMasiva = true },
+                        enabled = !cargandoSincronizacion && estadoProgresoLote == null
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.TableChart,
+                            contentDescription = "Creación Masiva (CSV)"
+                        )
+                    }
+
                     IconButton(
                         onClick = {
                             cargandoSincronizacion = true
@@ -202,46 +239,138 @@ fun PantallaGestionUsuarios(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            if (usuarios.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "No hay usuarios registrados.",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            } else {
-                LazyColumn(
+            val usuariosFiltrados = remember(usuarios, textoBusqueda, rolFiltroSeleccionado) {
+                usuarios.filter { usuario ->
+                    val coincideTexto = textoBusqueda.isBlank() ||
+                            usuario.nombre.contains(textoBusqueda, ignoreCase = true) ||
+                            usuario.correo.contains(textoBusqueda, ignoreCase = true) ||
+                            etiquetaRol(usuario.rol).contains(textoBusqueda, ignoreCase = true)
+
+                    val coincideRol = rolFiltroSeleccionado == null || usuario.rol == rolFiltroSeleccionado
+
+                    coincideTexto && coincideRol
+                }.sortedBy { it.nombre.lowercase() }
+            }
+
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Barra de Búsqueda y Filtros por Rol
+                Column(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
-                    items(usuarios, key = { it.id }) { usuario ->
-                        TarjetaUsuarioItem(
-                            usuario = usuario,
-                            esUsuarioPropio = (usuario.id == usuarioActualId),
-                            cargandoFoto = cargandoSubidaFotoId == usuario.id,
-                            onEditarClick = { usuarioParaEditar = usuario },
-                            onRestablecerContrasenaClick = { usuarioParaRestablecer = usuario },
-                            onCambiarEstadoActivo = { activo ->
-                                onCambiarEstadoActivo(usuario.id, activo) { res ->
-                                    if (res is Resultado.Error) {
-                                        mensajeSnack = res.mensaje ?: res.excepcion.localizedMessage
-                                    }
+                    OutlinedTextField(
+                        value = textoBusqueda,
+                        onValueChange = { textoBusqueda = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("Buscar por nombre, correo o rol...") },
+                        leadingIcon = {
+                            Icon(imageVector = Icons.Default.Search, contentDescription = "Buscar")
+                        },
+                        trailingIcon = {
+                            if (textoBusqueda.isNotEmpty()) {
+                                IconButton(onClick = { textoBusqueda = "" }) {
+                                    Icon(imageVector = Icons.Default.Clear, contentDescription = "Limpiar")
                                 }
-                            },
-                            onFotoSeleccionada = { uri ->
-                                idUsuarioAjustandoFoto = usuario.id
-                                uriAjustarImagen = uri
                             }
+                        },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        FilterChip(
+                            selected = (rolFiltroSeleccionado == null),
+                            onClick = { rolFiltroSeleccionado = null },
+                            label = { Text("Todos (${usuarios.size})") }
+                        )
+
+                        RolUsuario.entries.forEach { rol ->
+                            val cantidadRol = usuarios.count { it.rol == rol }
+                            FilterChip(
+                                selected = (rolFiltroSeleccionado == rol),
+                                onClick = {
+                                    rolFiltroSeleccionado = if (rolFiltroSeleccionado == rol) null else rol
+                                },
+                                label = { Text("${etiquetaRol(rol)} ($cantidadRol)") }
+                            )
+                        }
+                    }
+                }
+
+                if (usuarios.isEmpty()) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "No hay usuarios registrados.",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    item {
-                        Spacer(modifier = Modifier.height(80.dp)) // Espacio para el FAB
+                } else if (usuariosFiltrados.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = "No se encontraron usuarios con el filtro aplicado.",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            TextButton(
+                                onClick = {
+                                    textoBusqueda = ""
+                                    rolFiltroSeleccionado = null
+                                }
+                            ) {
+                                Text("Limpiar filtros")
+                            }
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(usuariosFiltrados, key = { it.id }) { usuario ->
+                            TarjetaUsuarioItem(
+                                usuario = usuario,
+                                esUsuarioPropio = (usuario.id == usuarioActualId),
+                                cargandoFoto = cargandoSubidaFotoId == usuario.id,
+                                onEditarClick = { usuarioParaEditar = usuario },
+                                onRestablecerContrasenaClick = { usuarioParaRestablecer = usuario },
+                                onCambiarEstadoActivo = { activo ->
+                                    onCambiarEstadoActivo(usuario.id, activo) { res ->
+                                        if (res is Resultado.Error) {
+                                            mensajeSnack = res.mensaje ?: res.excepcion.localizedMessage
+                                        }
+                                    }
+                                },
+                                onFotoSeleccionada = { uri ->
+                                    idUsuarioAjustandoFoto = usuario.id
+                                    uriAjustarImagen = uri
+                                }
+                            )
+                        }
+                        item {
+                            Spacer(modifier = Modifier.height(80.dp))
+                        }
                     }
                 }
             }
@@ -274,6 +403,52 @@ fun PantallaGestionUsuarios(
                     onResultado(resultado)
                 }
             }
+        )
+    }
+
+    if (mostrarDialogoCreacionMasiva) {
+        DialogoCreacionMasivaCsv(
+            onDismiss = { mostrarDialogoCreacionMasiva = false },
+            onDescargarPlantilla = {
+                onDescargarPlantillaCsv(context)
+            },
+            onConfirmarCreacionLote = { contenidoCsv ->
+                mostrarDialogoCreacionMasiva = false
+                onCrearUsuariosEnLoteCsv(
+                    context,
+                    contenidoCsv,
+                    { actual, total, correoActual ->
+                        estadoProgresoLote = Triple(actual, total, correoActual)
+                    },
+                    { resultado ->
+                        estadoProgresoLote = null
+                        when (resultado) {
+                            is Resultado.Exito -> {
+                                resultadoLote = resultado.datos
+                            }
+                            is Resultado.Error -> {
+                                mensajeSnack = resultado.mensaje ?: resultado.excepcion.localizedMessage
+                            }
+                            else -> {}
+                        }
+                    }
+                )
+            }
+        )
+    }
+
+    estadoProgresoLote?.let { (actual, total, correo) ->
+        DialogoProgresoLote(
+            actual = actual,
+            total = total,
+            correoActual = correo
+        )
+    }
+
+    resultadoLote?.let { res ->
+        DialogoResultadoCreacionMasiva(
+            resultado = res,
+            onDismiss = { resultadoLote = null }
         )
     }
 
@@ -850,3 +1025,298 @@ private fun DialogoCredencialesCreadas(
         }
     )
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DialogoCreacionMasivaCsv(
+    onDismiss: () -> Unit,
+    onDescargarPlantilla: () -> String,
+    onConfirmarCreacionLote: (contenidoCsv: String) -> Unit
+) {
+    val context = LocalContext.current
+    var textoCsv by remember { mutableStateOf("") }
+    var mensajeEstado by remember { mutableStateOf<String?>(null) }
+
+    val launcherCsv = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            try {
+                context.contentResolver.openInputStream(it)?.use { inputStream ->
+                    textoCsv = inputStream.bufferedReader().readText()
+                    mensajeEstado = "Archivo CSV cargado correctamente."
+                }
+            } catch (e: Exception) {
+                mensajeEstado = "Error al leer el archivo: ${e.localizedMessage}"
+            }
+        }
+    }
+
+    val filasCount = remember(textoCsv) {
+        val lineas = textoCsv.lines().map { it.trim() }.filter { it.isNotBlank() }
+        if (lineas.isEmpty()) 0
+        else {
+            val primera = lineas.first().lowercase()
+            if (primera.contains("nombre") || primera.contains("correo") || primera.contains("email")) {
+                lineas.size - 1
+            } else {
+                lineas.size
+            }
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.TableChart,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Creación Masiva de Usuarios (CSV)", style = MaterialTheme.typography.titleMedium)
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Text(
+                    text = "Selecciona un archivo CSV o pega el contenido directamente. Formato admitido: Nombre, Apellido, Correo, Rol, Contraseña",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = { launcherCsv.launch("*/*") },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(imageVector = Icons.Default.FileUpload, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Cargar CSV", style = MaterialTheme.typography.labelMedium)
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            val ruta = onDescargarPlantilla()
+                            if (ruta.isNotBlank()) {
+                                mensajeEstado = "Plantilla descargada en: $ruta"
+                            }
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(imageVector = Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Plantilla CSV", style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                OutlinedTextField(
+                    value = textoCsv,
+                    onValueChange = {
+                        textoCsv = it
+                        mensajeEstado = null
+                    },
+                    label = { Text("Contenido del CSV") },
+                    placeholder = {
+                        Text("Enrique, Rebollar, EnriqueR@stagetrack.com, Técnico, 123456\nDavid, Valdin, DavidV@stagetrack.com, Supervisor, 123456")
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(160.dp),
+                    keyboardOptions = KeyboardOptions.Default
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                if (filasCount > 0) {
+                    Text(
+                        text = "✓ Se detectaron $filasCount registros de usuarios listos para crear.",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                mensajeEstado?.let { msg ->
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = msg,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (textoCsv.isBlank()) {
+                        mensajeEstado = "El contenido CSV no puede estar vacío"
+                        return@Button
+                    }
+                    onConfirmarCreacionLote(textoCsv)
+                },
+                enabled = textoCsv.isNotBlank() && filasCount > 0
+            ) {
+                Text("Crear $filasCount Cuentas")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancelar")
+            }
+        }
+    )
+}
+
+@Composable
+private fun DialogoProgresoLote(
+    actual: Int,
+    total: Int,
+    correoActual: String
+) {
+    AlertDialog(
+        onDismissRequest = { /* No cerrar durante procesamiento */ },
+        title = { Text("Creando Usuarios en Lote...") },
+        text = {
+            Column {
+                Text("Procesando $actual de $total", fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(4.dp))
+                Text("Creando cuenta: $correoActual", style = MaterialTheme.typography.bodySmall)
+                Spacer(modifier = Modifier.height(16.dp))
+                LinearProgressIndicator(
+                    progress = { if (total > 0) actual.toFloat() / total.toFloat() else 0f },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {}
+    )
+}
+
+@Composable
+private fun DialogoResultadoCreacionMasiva(
+    resultado: LoteResultadoCreacion,
+    onDismiss: () -> Unit
+) {
+    val clipboardManager = LocalClipboardManager.current
+    var copiado by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Lote Procesado Exitosamente")
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Text(
+                    text = "Proceso finalizado. Total: ${resultado.totalProcesados} | Exitosos: ${resultado.exitoCount} | Errores: ${resultado.errorCount}",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "📄 Archivo de credenciales guardado en:\n${resultado.rutaArchivoCredenciales}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text("Credenciales Generadas:", fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(6.dp))
+
+                resultado.listaCredenciales.forEach { item ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (item.exito)
+                                MaterialTheme.colorScheme.surfaceVariant
+                            else
+                                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
+                        )
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(item.nombre, fontWeight = FontWeight.Bold)
+                                Text(etiquetaRol(item.rol), style = MaterialTheme.typography.labelSmall)
+                            }
+                            Text("Correo: ${item.correo}", style = MaterialTheme.typography.bodySmall)
+                            if (item.exito) {
+                                Text(
+                                    "Clave Temp: ${item.claveTemporal}",
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            } else {
+                                Text(
+                                    "Error: ${item.mensajeError ?: "Fallo"}",
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val sb = StringBuilder()
+                    sb.append("=== CREDENCIALES DE USUARIOS STAGETRACK ===\n\n")
+                    resultado.listaCredenciales.filter { it.exito }.forEach { item ->
+                        sb.append("• Nombre: ${item.nombre}\n")
+                        sb.append("  Correo: ${item.correo}\n")
+                        sb.append("  Clave Temporal: ${item.claveTemporal}\n")
+                        sb.append("  Rol: ${etiquetaRol(item.rol)}\n\n")
+                    }
+                    clipboardManager.setText(AnnotatedString(sb.toString()))
+                    copiado = true
+                }
+            ) {
+                Icon(
+                    imageVector = if (copiado) Icons.Default.CheckCircle else Icons.Default.ContentCopy,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(if (copiado) "¡Credenciales Copiadas!" else "Copiar Credenciales")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cerrar")
+            }
+        }
+    )
+}
+

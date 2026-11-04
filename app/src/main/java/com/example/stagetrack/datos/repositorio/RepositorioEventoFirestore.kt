@@ -5,6 +5,7 @@ import com.example.stagetrack.core.comun.Resultado
 import com.example.stagetrack.datos.local.dao.DaoEvento
 import com.example.stagetrack.datos.local.entidad.EntidadEvento
 import com.example.stagetrack.datos.mapeadores.MapeadorEvento
+import com.example.stagetrack.dominio.modelo.CategoriaEvento
 import com.example.stagetrack.dominio.modelo.EstadoEvento
 import com.example.stagetrack.dominio.modelo.Evento
 import com.example.stagetrack.dominio.repositorio.RepositorioEvento
@@ -43,12 +44,17 @@ class RepositorioEventoFirestore(
                                     id = doc.id,
                                     nombre = doc.getString("nombre") ?: "",
                                     cliente = doc.getString("cliente") ?: "",
+                                    categoria = doc.getString("categoria") ?: CategoriaEvento.CONCIERTO_SHOW.name,
                                     fechaInicio = doc.getLong("fechaInicio") ?: System.currentTimeMillis(),
                                     fechaFin = doc.getLong("fechaFin") ?: System.currentTimeMillis(),
                                     ubicacion = doc.getString("ubicacion") ?: "",
                                     idSupervisor = doc.getString("idSupervisor") ?: "",
                                     nombreSupervisor = doc.getString("nombreSupervisor") ?: "",
+                                    idJefeBodega = doc.getString("idJefeBodega"),
+                                    nombreJefeBodega = doc.getString("nombreJefeBodega"),
                                     idsTecnicosAsignadosCsv = doc.getString("idsTecnicosAsignadosCsv") ?: "",
+                                    idsEquiposAsignadosCsv = doc.getString("idsEquiposAsignadosCsv") ?: "",
+                                    notasMontaje = doc.getString("notasMontaje"),
                                     estado = doc.getString("estado") ?: EstadoEvento.PLANIFICADO.name
                                 )
                             } catch (_: Exception) {
@@ -87,12 +93,17 @@ class RepositorioEventoFirestore(
                 "id" to evento.id,
                 "nombre" to evento.nombre,
                 "cliente" to evento.cliente,
+                "categoria" to evento.categoria.name,
                 "fechaInicio" to evento.fechaInicio,
                 "fechaFin" to evento.fechaFin,
                 "ubicacion" to evento.ubicacion,
                 "idSupervisor" to evento.idSupervisor,
                 "nombreSupervisor" to evento.nombreSupervisor,
+                "idJefeBodega" to evento.idJefeBodega,
+                "nombreJefeBodega" to evento.nombreJefeBodega,
                 "idsTecnicosAsignadosCsv" to evento.idsTecnicosAsignados.joinToString(","),
+                "idsEquiposAsignadosCsv" to evento.idsEquiposAsignados.joinToString(","),
+                "notasMontaje" to evento.notasMontaje,
                 "estado" to evento.estado.name
             )
             coleccionEventos.document(evento.id).set(mapaData).await()
@@ -101,6 +112,10 @@ class RepositorioEventoFirestore(
         } catch (e: Exception) {
             Resultado.Exito(Unit)
         }
+    }
+
+    override suspend fun actualizarEvento(evento: Evento): Resultado<Unit> {
+        return crearNuevoEvento(evento)
     }
 
     override suspend fun actualizarEstadoEvento(

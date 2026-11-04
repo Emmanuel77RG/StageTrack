@@ -12,5 +12,6 @@ interface RepositorioEvento {
     fun obtenerTodosLosEventos(): Flow<List<Evento>>
     fun obtenerEventosPorTecnico(idTecnico: String): Flow<List<Evento>>
     suspend fun crearNuevoEvento(evento: Evento): Resultado<Unit>
+    suspend fun actualizarEvento(evento: Evento): Resultado<Unit>
     suspend fun actualizarEstadoEvento(idEvento: String, estado: EstadoEvento): Resultado<Unit>
 }

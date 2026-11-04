@@ -38,6 +38,10 @@ class RepositorioEventoRoom(
         }
     }
 
+    override suspend fun actualizarEvento(evento: Evento): Resultado<Unit> {
+        return crearNuevoEvento(evento)
+    }
+
     override suspend fun actualizarEstadoEvento(
         idEvento: String,
         estado: EstadoEvento

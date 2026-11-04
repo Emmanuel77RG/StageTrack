@@ -94,10 +94,13 @@ import com.example.stagetrack.core.comun.Resultado
 import com.example.stagetrack.core.qr.UtilidadQR
 import com.example.stagetrack.dominio.modelo.Equipo
 import com.example.stagetrack.dominio.modelo.EstadoEquipo
+import com.example.stagetrack.dominio.modelo.EstadoEvento
 import com.example.stagetrack.dominio.modelo.RolUsuario
 import com.example.stagetrack.dominio.modelo.Usuario
+import com.example.stagetrack.dominio.modelo.Evento
 import com.example.stagetrack.ui.componentes.CameraPreview
 import com.example.stagetrack.ui.viewmodel.EquipoViewModel
+import com.example.stagetrack.ui.viewmodel.EventoViewModel
 import java.io.File
 import java.io.FileOutputStream
 
@@ -105,6 +108,7 @@ import java.io.FileOutputStream
 @Composable
 fun PantallaInventarioEquipos(
     equipoViewModel: EquipoViewModel,
+    eventoViewModel: EventoViewModel? = null,
     usuarioActual: Usuario? = null,
     filtroEstadoInicial: EstadoEquipo? = null,
     onVolverClick: () -> Unit,
@@ -112,7 +116,12 @@ fun PantallaInventarioEquipos(
     onReportarDanoClick: (Equipo) -> Unit
 ) {
     val equipos by equipoViewModel.listaEquipos.collectAsState()
+    val listaEventos by eventoViewModel?.listaEventos?.collectAsState() ?: remember { mutableStateOf(emptyList()) }
+    val idEventoFiltroPersistente by equipoViewModel.eventoFiltroSeleccionadoId.collectAsState()
 
+    val eventoSeleccionadoFiltro = remember(listaEventos, idEventoFiltroPersistente) {
+        listaEventos.find { it.id == idEventoFiltroPersistente }
+    }
     var busquedaTexto by remember { mutableStateOf("") }
     var estadoFiltroSeleccionado by remember(filtroEstadoInicial) { mutableStateOf<EstadoEquipo?>(filtroEstadoInicial) }
     var categoriaFiltroSeleccionada by remember { mutableStateOf<String?>(null) }
@@ -141,11 +150,20 @@ fun PantallaInventarioEquipos(
     val puedeRegistrarEquipo = esJefeBodega || esAdmin
     val puedeGenerarQr = esJefeBodega || esAdmin
 
-    // Para el Técnico únicamente se muestran los equipos asignados directamente a su cuenta (en custodia, tránsito o devolución)
-    val equiposVisiblesPorRol = if (esTecnico) {
-        equipos.filter { it.idCustodioActual == usuarioActual.id }
-    } else {
-        equipos
+    val eventosBodega = remember(listaEventos, usuarioActual) {
+        listaEventos.filter {
+            it.idJefeBodega == usuarioActual?.id ||
+            esAdmin || esJefeBodega ||
+            it.estado == EstadoEvento.PLANIFICADO ||
+            it.estado == EstadoEvento.EN_CURSO
+        }
+    }
+
+    // Filtrado por rol y evento seleccionado
+    val equiposVisiblesPorRol = when {
+        esTecnico -> equipos.filter { it.idCustodioActual == usuarioActual.id }
+        eventoSeleccionadoFiltro != null -> equipos.filter { it.id in eventoSeleccionadoFiltro!!.idsEquiposAsignados }
+        else -> equipos
     }
 
     val equiposFiltrados = equiposVisiblesPorRol.filter { equipo ->
@@ -234,7 +252,7 @@ fun PantallaInventarioEquipos(
                 OutlinedTextField(
                     value = busquedaTexto,
                     onValueChange = { busquedaTexto = it },
-                    label = { Text("Buscar por nombre, serie o QR") },
+                    label = { Text("Buscar equipo") },
                     leadingIcon = {
                         Icon(
                             imageVector = Icons.Default.Search,
@@ -290,6 +308,68 @@ fun PantallaInventarioEquipos(
                 }
             }
 
+            if ((esJefeBodega || esAdmin || esSupervisor) && eventosBodega.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                var menuEventosExpandido by remember { mutableStateOf(false) }
+
+                ExposedDropdownMenuBox(
+                    expanded = menuEventosExpandido,
+                    onExpandedChange = { menuEventosExpandido = !menuEventosExpandido },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    OutlinedTextField(
+                        value = eventoSeleccionadoFiltro?.nombre ?: "Inventario Global (General)",
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Filtrar por Proyecto / Evento", style = MaterialTheme.typography.labelSmall) },
+                        trailingIcon = {
+                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = menuEventosExpandido)
+                        },
+                        colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor()
+                    )
+
+                    ExposedDropdownMenu(
+                        expanded = menuEventosExpandido,
+                        onDismissRequest = { menuEventosExpandido = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = "Inventario Global (General)",
+                                    fontWeight = if (eventoSeleccionadoFiltro == null) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (eventoSeleccionadoFiltro == null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                )
+                            },
+                            onClick = {
+                                equipoViewModel.seleccionarEventoFiltro(null)
+                                menuEventosExpandido = false
+                            }
+                        )
+
+                        eventosBodega.forEach { evt ->
+                            val esSeleccionado = eventoSeleccionadoFiltro?.id == evt.id
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = evt.nombre,
+                                        fontWeight = if (esSeleccionado) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (esSeleccionado) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                    )
+                                },
+                                onClick = {
+                                    equipoViewModel.seleccionarEventoFiltro(evt.id)
+                                    menuEventosExpandido = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(16.dp))
 
             if (equiposFiltrados.isEmpty()) {
@@ -309,12 +389,17 @@ fun PantallaInventarioEquipos(
                 ) {
                     items(equiposFiltrados, key = { it.id }) { equipo ->
                         val esMio = (usuarioActual != null && equipo.idCustodioActual == usuarioActual.id)
-                        val esReceptorTransito = (usuarioActual != null && equipo.estadoActual == EstadoEquipo.EN_TRANSITO)
+                        val esReceptorTransito = (usuarioActual != null && equipo.estadoActual == EstadoEquipo.EN_TRANSITO && equipo.idCustodioActual == usuarioActual.id)
+                        val estaEnTransito = equipo.estadoActual == EstadoEquipo.EN_TRANSITO
+                        val estaEnProcesoDevolucion = equipo.estadoActual == EstadoEquipo.EN_PROCESO_DEVOLUCION
 
-                        // Permisos dinámicos de acción operativa según rol y posesión
+                        // En la vista Global General (sin evento seleccionado), el botón de Despacho/Traspaso se deshabilita.
+                        // El despacho sólo se habilita al seleccionar un Evento Específico o para el receptor real.
                         val permiteAccionesCustodia = when {
-                            esJefeBodega || esAdmin || esSupervisor -> true
-                            esTecnico -> esMio || esReceptorTransito
+                            estaEnTransito -> esReceptorTransito
+                            estaEnProcesoDevolucion -> esJefeBodega || esAdmin
+                            eventoSeleccionadoFiltro != null -> esJefeBodega || esAdmin || esSupervisor
+                            esTecnico -> esMio
                             else -> false
                         }
 
@@ -323,6 +408,7 @@ fun PantallaInventarioEquipos(
                             equipo = equipo,
                             esFiltroDano = (estadoFiltroSeleccionado == EstadoEquipo.REPORTADO_DANADO),
                             puedeGenerarQr = puedeGenerarQr,
+                            esGestionador = (esJefeBodega || esAdmin || esSupervisor),
                             onVerQrClick = if (puedeGenerarQr) { { equipoParaVerQr = equipo } } else null,
                             onTransferirCustodiaClick = if (permiteAccionesCustodia) { { onTransferirCustodiaClick(equipo) } } else null,
                             onReportarDanoClick = if (permiteAccionesCustodia) { { onReportarDanoClick(equipo) } } else null,
@@ -639,6 +725,7 @@ fun TarjetaEquipoItem(
     equipo: Equipo,
     esFiltroDano: Boolean = false,
     puedeGenerarQr: Boolean = false,
+    esGestionador: Boolean = false,
     onVerQrClick: (() -> Unit)? = null,
     onTransferirCustodiaClick: (() -> Unit)? = null,
     onReportarDanoClick: (() -> Unit)? = null,
@@ -703,7 +790,7 @@ fun TarjetaEquipoItem(
                     modifier = Modifier
                         .size(80.dp)
                         .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.surface)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
                         .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp)),
                     contentAlignment = Alignment.Center
                 ) {
@@ -711,8 +798,10 @@ fun TarjetaEquipoItem(
                         Image(
                             bitmap = bitmapEquipo.asImageBitmap(),
                             contentDescription = "Foto de ${equipo.nombre}",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(4.dp)
                         )
                     } else {
                         Icon(
@@ -791,21 +880,25 @@ fun TarjetaEquipoItem(
                     }
 
                     if (!equipo.nombreCustodioActual.isNullOrBlank()) {
-                        Row {
-                            Text(
-                                text = "Custodio: ",
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.tertiary
-                            )
-                            Text(
-                                text = equipo.nombreCustodioActual,
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.tertiary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                        val esTransito = equipo.estadoActual == EstadoEquipo.EN_TRANSITO
+
+                        if (!esTransito || esGestionador) {
+                            Row {
+                                Text(
+                                    text = if (esTransito) "En Tránsito a: " else "Custodio: ",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (esTransito) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary
+                                )
+                                Text(
+                                    text = equipo.nombreCustodioActual,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (esTransito) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
                 }
@@ -1225,15 +1318,19 @@ fun DialogoRegistroEquipo(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(140.dp)
+                                .height(160.dp)
                                 .clip(RoundedCornerShape(8.dp))
-                                .border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp)),
+                            contentAlignment = Alignment.Center
                         ) {
                             Image(
                                 bitmap = fotoBitmap!!.asImageBitmap(),
                                 contentDescription = "Evidencia del equipo",
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
+                                contentScale = ContentScale.Fit,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(6.dp)
                             )
                         }
                     } else {
@@ -1447,15 +1544,19 @@ fun DialogoEditarEquipo(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(140.dp)
+                                .height(160.dp)
                                 .clip(RoundedCornerShape(8.dp))
-                                .border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp)),
+                            contentAlignment = Alignment.Center
                         ) {
                             Image(
                                 bitmap = fotoBitmap!!.asImageBitmap(),
                                 contentDescription = "Evidencia del equipo",
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
+                                contentScale = ContentScale.Fit,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(6.dp)
                             )
                         }
                     }

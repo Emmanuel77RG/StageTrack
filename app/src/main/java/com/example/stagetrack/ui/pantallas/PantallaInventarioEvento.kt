@@ -27,10 +27,12 @@ import androidx.compose.material.icons.filled.FactCheck
 import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -92,56 +94,13 @@ fun PantallaInventarioEvento(
     onReportarDanoClick: (Equipo) -> Unit
 ) {
     val context = LocalContext.current
-    val todosLosEquipos by equipoViewModel.listaEquipos.collectAsState()
-
-    var modoVistaActual by remember { mutableStateOf(ModoVistaEvento.INVENTARIO) }
-    var busquedaTexto by remember { mutableStateOf("") }
     var mostrarDialogoAsignar by remember { mutableStateOf(false) }
-    var mostrarDialogoConfirmarCierre by remember { mutableStateOf(false) }
-    var equipoParaVerQr by remember { mutableStateOf<Equipo?>(null) }
-    var equipoParaVerReporteDano by remember { mutableStateOf<Equipo?>(null) }
-
-    // Mapas de estado de verificación del Checklist
-    val verificacionSalidaMap = remember { mutableStateMapOf<String, Boolean>() }
-    val verificacionEntradaMap = remember { mutableStateMapOf<String, Boolean>() }
-
-    val reportesDanoParaEquipo by (
-        equipoParaVerReporteDano?.let { eq ->
-            equipoViewModel.obtenerReportesDanoPorEquipo(eq.id).collectAsState(initial = emptyList())
-        } ?: remember { mutableStateOf(emptyList()) }
-    )
 
     val esSupervisor = usuarioActual?.rol == RolUsuario.SUPERVISOR || usuarioActual?.rol == RolUsuario.ADMINISTRADOR_GENERAL
     val esBodega = usuarioActual?.rol == RolUsuario.JEFE_BODEGA
     val puedeAsignarEquipos = esSupervisor || esBodega
 
-    val formatoFecha = remember { SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()) }
-    val fechaTexto = remember(evento.fechaInicio, evento.fechaFin) {
-        "${formatoFecha.format(Date(evento.fechaInicio))} - ${formatoFecha.format(Date(evento.fechaFin))}"
-    }
-
-    // Filtrar los equipos asignados al evento
-    val equiposDelEvento = todosLosEquipos.filter { equipo ->
-        val asignadoAUbicacion = equipo.ubicacionActual.equals(evento.ubicacion, ignoreCase = true) ||
-                equipo.ubicacionActual.contains(evento.nombre, ignoreCase = true)
-        val asignadoATecnico = equipo.idCustodioActual in evento.idsTecnicosAsignados
-
-        val esDeEsteEvento = asignadoAUbicacion || asignadoATecnico ||
-                equipo.idCustodioActual == evento.idSupervisor
-
-        val coincideBusqueda = equipo.nombre.contains(busquedaTexto, ignoreCase = true) ||
-                equipo.numeroSerie.contains(busquedaTexto, ignoreCase = true) ||
-                equipo.categoria.contains(busquedaTexto, ignoreCase = true)
-
-        esDeEsteEvento && coincideBusqueda
-    }
-
-    // Métricas de Checklist
-    val totalEquipos = equiposDelEvento.size
-    val totalSalidaVerificados = equiposDelEvento.count { verificacionSalidaMap[it.id] == true }
-    val totalEntradaVerificados = equiposDelEvento.count { verificacionEntradaMap[it.id] == true }
-    val progresoSalida = if (totalEquipos > 0) totalSalidaVerificados.toFloat() / totalEquipos.toFloat() else 0f
-    val progresoEntrada = if (totalEquipos > 0) totalEntradaVerificados.toFloat() / totalEquipos.toFloat() else 0f
+    val todosLosEquipos by equipoViewModel.listaEquipos.collectAsState()
 
     Scaffold(
         topBar = {
@@ -171,7 +130,7 @@ fun PantallaInventarioEvento(
             )
         },
         floatingActionButton = {
-            if (puedeAsignarEquipos && modoVistaActual == ModoVistaEvento.INVENTARIO) {
+            if (puedeAsignarEquipos) {
                 FloatingActionButton(
                     onClick = { mostrarDialogoAsignar = true },
                     containerColor = MaterialTheme.colorScheme.secondary
@@ -188,14 +147,115 @@ fun PantallaInventarioEvento(
             }
         }
     ) { paddingValues ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Ficha del evento
+            ContenidoInventarioEventoEmbedded(
+                evento = evento,
+                equipoViewModel = equipoViewModel,
+                usuarioActual = usuarioActual,
+                mostrarEncabezado = true,
+                onTransferirCustodiaClick = onTransferirCustodiaClick,
+                onReportarDanoClick = onReportarDanoClick
+            )
+        }
+
+        if (mostrarDialogoAsignar) {
+            val equiposDelEvento = todosLosEquipos.filter { equipo ->
+                equipo.ubicacionActual.equals(evento.ubicacion, ignoreCase = true) ||
+                equipo.ubicacionActual.contains(evento.nombre, ignoreCase = true) ||
+                equipo.idCustodioActual in evento.idsTecnicosAsignados ||
+                equipo.idCustodioActual == evento.idSupervisor ||
+                evento.idsEquiposAsignados.contains(equipo.id)
+            }
+
+            DialogoAsignarEquiposAEvento(
+                evento = evento,
+                equiposDisponibles = todosLosEquipos.filter { !equiposDelEvento.contains(it) },
+                onDismiss = { mostrarDialogoAsignar = false },
+                onAsignar = { equiposSeleccionados ->
+                    equiposSeleccionados.forEach { equipo ->
+                        equipoViewModel.actualizarEquipoExistente(
+                            equipoActualizado = equipo.copy(ubicacionActual = evento.ubicacion),
+                            onResultado = {}
+                        )
+                    }
+                    mostrarDialogoAsignar = false
+                }
+            )
+        }
+    }
+}
+
+/**
+ * Contenido embebible del Inventario y Checklist de Evento (para pestañas o vista completa)
+ */
+@Composable
+fun ContenidoInventarioEventoEmbedded(
+    evento: Evento,
+    equipoViewModel: EquipoViewModel,
+    usuarioActual: Usuario? = null,
+    modifier: Modifier = Modifier,
+    mostrarEncabezado: Boolean = true,
+    onTransferirCustodiaClick: (Equipo) -> Unit = {},
+    onReportarDanoClick: (Equipo) -> Unit = {}
+) {
+    val context = LocalContext.current
+    val todosLosEquipos by equipoViewModel.listaEquipos.collectAsState()
+
+    var modoVistaActual by remember { mutableStateOf(ModoVistaEvento.INVENTARIO) }
+    var busquedaTexto by remember { mutableStateOf("") }
+    var mostrarDialogoConfirmarCierre by remember { mutableStateOf(false) }
+    var equipoParaVerQr by remember { mutableStateOf<Equipo?>(null) }
+    var equipoParaVerReporteDano by remember { mutableStateOf<Equipo?>(null) }
+
+    val verificacionSalidaMap = remember { mutableStateMapOf<String, Boolean>() }
+    val verificacionEntradaMap = remember { mutableStateMapOf<String, Boolean>() }
+
+    val reportesDanoParaEquipo by (
+        equipoParaVerReporteDano?.let { eq ->
+            equipoViewModel.obtenerReportesDanoPorEquipo(eq.id).collectAsState(initial = emptyList())
+        } ?: remember { mutableStateOf(emptyList()) }
+    )
+
+    val esSupervisor = usuarioActual?.rol == RolUsuario.SUPERVISOR || usuarioActual?.rol == RolUsuario.ADMINISTRADOR_GENERAL
+    val esBodega = usuarioActual?.rol == RolUsuario.JEFE_BODEGA
+
+    val formatoFecha = remember { SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()) }
+    val fechaTexto = remember(evento.fechaInicio, evento.fechaFin) {
+        "${formatoFecha.format(Date(evento.fechaInicio))} - ${formatoFecha.format(Date(evento.fechaFin))}"
+    }
+
+    val equiposDelEvento = todosLosEquipos.filter { equipo ->
+        val esReservadoRider = evento.idsEquiposAsignados.contains(equipo.id)
+        val asignadoAUbicacion = (equipo.ubicacionActual.isNotBlank() && equipo.ubicacionActual.equals(evento.ubicacion, ignoreCase = true)) ||
+                equipo.ubicacionActual.contains(evento.nombre, ignoreCase = true)
+
+        val esDeEsteEvento = esReservadoRider || asignadoAUbicacion
+
+        val coincideBusqueda = busquedaTexto.isBlank() ||
+                equipo.nombre.contains(busquedaTexto, ignoreCase = true) ||
+                equipo.numeroSerie.contains(busquedaTexto, ignoreCase = true) ||
+                equipo.categoria.contains(busquedaTexto, ignoreCase = true)
+
+        esDeEsteEvento && coincideBusqueda
+    }
+
+    val totalEquipos = equiposDelEvento.size
+    val totalSalidaVerificados = equiposDelEvento.count { verificacionSalidaMap[it.id] == true }
+    val totalEntradaVerificados = equiposDelEvento.count { verificacionEntradaMap[it.id] == true }
+    val progresoSalida = if (totalEquipos > 0) totalSalidaVerificados.toFloat() / totalEquipos.toFloat() else 0f
+    val progresoEntrada = if (totalEquipos > 0) totalEntradaVerificados.toFloat() / totalEquipos.toFloat() else 0f
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        if (mostrarEncabezado) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
@@ -206,17 +266,25 @@ fun PantallaInventarioEvento(
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.Top
                     ) {
-                        Text(
-                            text = evento.nombre,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 8.dp)
+                        ) {
+                            Text(
+                                text = evento.nombre,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
+
                         AssistChip(
                             onClick = {},
-                            label = { Text(evento.estado.name) }
+                            label = { Text(etiquetaEstado(evento.estado), fontWeight = FontWeight.Bold) },
+                            colors = AssistChipDefaults.assistChipColors(containerColor = colorEstadoContainer(evento.estado))
                         )
                     }
 
@@ -244,184 +312,223 @@ fun PantallaInventarioEvento(
                     }
                 }
             }
+        }
 
-            // Pestañas / Selector de Modo de Vista
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                items(ModoVistaEvento.entries) { modo ->
-                    FilterChip(
-                        selected = modoVistaActual == modo,
-                        onClick = { modoVistaActual = modo },
-                        label = { Text(modo.titulo, fontWeight = FontWeight.Bold) },
-                        leadingIcon = {
-                            val ic = when (modo) {
-                                ModoVistaEvento.INVENTARIO -> Icons.Default.Event
-                                ModoVistaEvento.CHECKLIST_SALIDA -> Icons.Default.LocalShipping
-                                ModoVistaEvento.CHECKLIST_ENTRADA -> Icons.Default.FactCheck
-                            }
-                            Icon(imageVector = ic, contentDescription = null, modifier = Modifier.size(16.dp))
+        // Pestañas / Selector de Modo de Vista
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            items(ModoVistaEvento.entries) { modo ->
+                FilterChip(
+                    selected = modoVistaActual == modo,
+                    onClick = { modoVistaActual = modo },
+                    label = { Text(modo.titulo, fontWeight = FontWeight.Bold) },
+                    leadingIcon = {
+                        val ic = when (modo) {
+                            ModoVistaEvento.INVENTARIO -> Icons.Default.Event
+                            ModoVistaEvento.CHECKLIST_SALIDA -> Icons.Default.LocalShipping
+                            ModoVistaEvento.CHECKLIST_ENTRADA -> Icons.Default.FactCheck
                         }
+                        Icon(imageVector = ic, contentDescription = null, modifier = Modifier.size(16.dp))
+                    }
+                )
+            }
+        }
+
+        // Sección de Progreso según modo de checklist
+        when (modoVistaActual) {
+            ModoVistaEvento.CHECKLIST_SALIDA -> {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Carga Despachada:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                            Text("$totalSalidaVerificados / $totalEquipos (${(progresoSalida * 100).toInt()}%)", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        LinearProgressIndicator(
+                            progress = { progresoSalida },
+                            modifier = Modifier.fillMaxWidth().height(8.dp),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        OutlinedButton(
+                            onClick = {
+                                equiposDelEvento.forEach { verificacionSalidaMap[it.id] = true }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Marcar Todos Verificados en Salida", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+
+            ModoVistaEvento.CHECKLIST_ENTRADA -> {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Devolución Recepcionada:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                            Text("$totalEntradaVerificados / $totalEquipos (${(progresoEntrada * 100).toInt()}%)", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        LinearProgressIndicator(
+                            progress = { progresoEntrada },
+                            modifier = Modifier.fillMaxWidth().height(8.dp),
+                            color = Color(0xFF4CAF50)
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    equiposDelEvento.forEach { verificacionEntradaMap[it.id] = true }
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Marcar Todos", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+                            }
+
+                            if (esBodega || esSupervisor) {
+                                Button(
+                                    onClick = { mostrarDialogoConfirmarCierre = true },
+                                    enabled = totalEntradaVerificados > 0,
+                                    modifier = Modifier.weight(1f),
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                                ) {
+                                    Text("Devolver a Bodega", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            else -> {}
+        }
+
+        OutlinedTextField(
+            value = busquedaTexto,
+            onValueChange = { busquedaTexto = it },
+            label = { Text("Buscar equipos por nombre/serie/categoría") },
+            leadingIcon = {
+                Icon(imageVector = Icons.Default.Search, contentDescription = null)
+            },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+
+        if (equiposDelEvento.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        imageVector = Icons.Default.Event,
+                        contentDescription = null,
+                        modifier = Modifier.size(48.dp),
+                        tint = MaterialTheme.colorScheme.outline
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "No hay equipos asignados a este evento.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
-
-            // Sección de Progreso según modo de checklist
-            when (modoVistaActual) {
-                ModoVistaEvento.CHECKLIST_SALIDA -> {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text("Carga Despachada:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                                Text("$totalSalidaVerificados / $totalEquipos (${(progresoSalida * 100).toInt()}%)", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                            }
-                            Spacer(modifier = Modifier.height(6.dp))
-                            LinearProgressIndicator(
-                                progress = { progresoSalida },
-                                modifier = Modifier.fillMaxWidth().height(8.dp),
-                                color = MaterialTheme.colorScheme.primary
+        } else {
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                items(equiposDelEvento, key = { it.id }) { equipo ->
+                    when (modoVistaActual) {
+                        ModoVistaEvento.INVENTARIO -> {
+                            TarjetaEquipoItem(
+                                equipo = equipo,
+                                puedeGenerarQr = esBodega,
+                                onVerQrClick = if (esBodega) { { equipoParaVerQr = equipo } } else null,
+                                onTransferirCustodiaClick = { onTransferirCustodiaClick(equipo) },
+                                onReportarDanoClick = { onReportarDanoClick(equipo) },
+                                onVerReporteDanoClick = { equipoParaVerReporteDano = equipo }
                             )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            OutlinedButton(
-                                onClick = {
-                                    equiposDelEvento.forEach { verificacionSalidaMap[it.id] = true }
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Marcar Todos Verificados en Salida", fontWeight = FontWeight.Bold)
-                            }
                         }
-                    }
-                }
 
-                ModoVistaEvento.CHECKLIST_ENTRADA -> {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Row(
+                        ModoVistaEvento.CHECKLIST_SALIDA -> {
+                            val estaVerificado = verificacionSalidaMap[equipo.id] == true
+                            Card(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text("Devolución Recepcionada:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                                Text("$totalEntradaVerificados / $totalEquipos (${(progresoEntrada * 100).toInt()}%)", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                            }
-                            Spacer(modifier = Modifier.height(6.dp))
-                            LinearProgressIndicator(
-                                progress = { progresoEntrada },
-                                modifier = Modifier.fillMaxWidth().height(8.dp),
-                                color = Color(0xFF4CAF50)
-                            )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                OutlinedButton(
-                                    onClick = {
-                                        equiposDelEvento.forEach { verificacionEntradaMap[it.id] = true }
-                                    },
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Text("Marcar Todos", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
-                                }
-
-                                if (esBodega || esSupervisor) {
-                                    Button(
-                                        onClick = { mostrarDialogoConfirmarCierre = true },
-                                        enabled = totalEntradaVerificados > 0,
-                                        modifier = Modifier.weight(1f),
-                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                                    ) {
-                                        Text("Devolver a Bodega", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                else -> {}
-            }
-
-            OutlinedTextField(
-                value = busquedaTexto,
-                onValueChange = { busquedaTexto = it },
-                label = { Text("Buscar equipos por nombre/serie/categoría") },
-                leadingIcon = {
-                    Icon(imageVector = Icons.Default.Search, contentDescription = null)
-                },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
-
-            if (equiposDelEvento.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            imageVector = Icons.Default.Event,
-                            contentDescription = null,
-                            modifier = Modifier.size(48.dp),
-                            tint = MaterialTheme.colorScheme.outline
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "No hay equipos asignados a este evento.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    items(equiposDelEvento, key = { it.id }) { equipo ->
-                        when (modoVistaActual) {
-                            ModoVistaEvento.INVENTARIO -> {
-                                TarjetaEquipoItem(
-                                    equipo = equipo,
-                                    puedeGenerarQr = esBodega,
-                                    onVerQrClick = if (esBodega) { { equipoParaVerQr = equipo } } else null,
-                                    onTransferirCustodiaClick = { onTransferirCustodiaClick(equipo) },
-                                    onReportarDanoClick = { onReportarDanoClick(equipo) },
-                                    onVerReporteDanoClick = { equipoParaVerReporteDano = equipo }
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (estaVerificado) Color(0xFFE8F5E9) else MaterialTheme.colorScheme.surfaceVariant
                                 )
-                            }
-
-                            ModoVistaEvento.CHECKLIST_SALIDA -> {
-                                val estaVerificado = verificacionSalidaMap[equipo.id] == true
-                                Card(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = if (estaVerificado) Color(0xFFE8F5E9) else MaterialTheme.colorScheme.surfaceVariant
-                                    )
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
+                                    Checkbox(
+                                        checked = estaVerificado,
+                                        onCheckedChange = { chk -> verificacionSalidaMap[equipo.id] = chk }
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(equipo.nombre, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                        Text("${equipo.categoria} | N/S: ${equipo.numeroSerie}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    AssistChip(
+                                        onClick = { verificacionSalidaMap[equipo.id] = !estaVerificado },
+                                        label = { Text(if (estaVerificado) "Despachado" else "Pendiente") },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = if (estaVerificado) Icons.Default.CheckCircle else Icons.Default.Schedule,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(16.dp),
+                                                tint = if (estaVerificado) Color(0xFF2E7D32) else MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        ModoVistaEvento.CHECKLIST_ENTRADA -> {
+                            val estaDevuelto = verificacionEntradaMap[equipo.id] == true
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (estaDevuelto) Color(0xFFE8F5E9) else MaterialTheme.colorScheme.surfaceVariant
+                                )
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
                                     Row(
-                                        modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                        modifier = Modifier.fillMaxWidth(),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Checkbox(
-                                            checked = estaVerificado,
-                                            onCheckedChange = { chk -> verificacionSalidaMap[equipo.id] = chk }
+                                            checked = estaDevuelto,
+                                            onCheckedChange = { chk -> verificacionEntradaMap[equipo.id] = chk }
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Column(modifier = Modifier.weight(1f)) {
@@ -429,62 +536,39 @@ fun PantallaInventarioEvento(
                                             Text("${equipo.categoria} | N/S: ${equipo.numeroSerie}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
                                         AssistChip(
-                                            onClick = { verificacionSalidaMap[equipo.id] = !estaVerificado },
-                                            label = { Text(if (estaVerificado) "Despachado ✅" else "Pendiente ⏳") }
+                                            onClick = { verificacionEntradaMap[equipo.id] = !estaDevuelto },
+                                            label = { Text(if (estaDevuelto) "Devuelto OK" else "Por Recepcionar") },
+                                            leadingIcon = {
+                                                Icon(
+                                                    imageVector = if (estaDevuelto) Icons.Default.CheckCircle else Icons.Default.Schedule,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(16.dp),
+                                                    tint = if (estaDevuelto) Color(0xFF2E7D32) else MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
                                         )
                                     }
-                                }
-                            }
 
-                            ModoVistaEvento.CHECKLIST_ENTRADA -> {
-                                val estaDevuelto = verificacionEntradaMap[equipo.id] == true
-                                Card(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = if (estaDevuelto) Color(0xFFE8F5E9) else MaterialTheme.colorScheme.surfaceVariant
-                                    )
-                                ) {
-                                    Column(modifier = Modifier.padding(12.dp)) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            verticalAlignment = Alignment.CenterVertically
+                                    if (equipo.estadoActual == EstadoEquipo.REPORTADO_DANADO) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        OutlinedButton(
+                                            onClick = { equipoParaVerReporteDano = equipo },
+                                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                                            modifier = Modifier.fillMaxWidth()
                                         ) {
-                                            Checkbox(
-                                                checked = estaDevuelto,
-                                                onCheckedChange = { chk -> verificacionEntradaMap[equipo.id] = chk }
-                                            )
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Column(modifier = Modifier.weight(1f)) {
-                                                Text(equipo.nombre, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
-                                                Text("${equipo.categoria} | N/S: ${equipo.numeroSerie}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                            }
-                                            AssistChip(
-                                                onClick = { verificacionEntradaMap[equipo.id] = !estaDevuelto },
-                                                label = { Text(if (estaDevuelto) "Devuelto OK ✅" else "Por Recepcionar ⏳") }
-                                            )
+                                            Icon(imageVector = Icons.Default.Warning, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("Ver Reporte de Daño Registrado", style = MaterialTheme.typography.labelSmall)
                                         }
-
-                                        if (equipo.estadoActual == EstadoEquipo.REPORTADO_DANADO) {
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            OutlinedButton(
-                                                onClick = { equipoParaVerReporteDano = equipo },
-                                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                Icon(imageVector = Icons.Default.Warning, contentDescription = null, modifier = Modifier.size(16.dp))
-                                                Spacer(modifier = Modifier.width(6.dp))
-                                                Text("Ver Reporte de Daño Registrado", style = MaterialTheme.typography.labelSmall)
-                                            }
-                                        } else {
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            OutlinedButton(
-                                                onClick = { onReportarDanoClick(equipo) },
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                Icon(imageVector = Icons.Default.Warning, contentDescription = null, modifier = Modifier.size(16.dp))
-                                                Spacer(modifier = Modifier.width(6.dp))
-                                                Text("Reportar Daño al Recepcionar", style = MaterialTheme.typography.labelSmall)
-                                            }
+                                    } else {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        OutlinedButton(
+                                            onClick = { onReportarDanoClick(equipo) },
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Icon(imageVector = Icons.Default.Warning, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("Reportar Daño al Recepcionar", style = MaterialTheme.typography.labelSmall)
                                         }
                                     }
                                 }
@@ -494,74 +578,53 @@ fun PantallaInventarioEvento(
                 }
             }
         }
+    }
 
-        equipoParaVerReporteDano?.let { equipoDanado ->
-            DialogoVerReporteDano(
-                equipo = equipoDanado,
-                reportes = reportesDanoParaEquipo,
-                onDismiss = { equipoParaVerReporteDano = null }
-            )
-        }
+    equipoParaVerReporteDano?.let { equipoDanado ->
+        DialogoVerReporteDano(
+            equipo = equipoDanado,
+            reportes = reportesDanoParaEquipo,
+            onDismiss = { equipoParaVerReporteDano = null }
+        )
+    }
 
-        equipoParaVerQr?.let { equipo ->
-            DialogoVerQrEquipo(
-                equipo = equipo,
-                onDescartar = { equipoParaVerQr = null }
-            )
-        }
+    equipoParaVerQr?.let { equipo ->
+        DialogoVerQrEquipo(
+            equipo = equipo,
+            onDescartar = { equipoParaVerQr = null }
+        )
+    }
 
-        if (mostrarDialogoConfirmarCierre) {
-            val idsParaDevolver = equiposDelEvento.filter { verificacionEntradaMap[it.id] == true }.map { it.id }
-            AlertDialog(
-                onDismissRequest = { mostrarDialogoConfirmarCierre = false },
-                title = { Text("Confirmar Cierre y Devolución a Bodega") },
-                text = {
-                    Text(
-                        "¿Confirmas que deseas restablecer los ${idsParaDevolver.size} equipos verificados al stock disponible en 'Bodega Principal'?"
-                    )
-                },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            equipoViewModel.devolverEquiposDeEventoABodega(idsParaDevolver) { res ->
-                                if (res is Resultado.Exito) {
-                                    Toast.makeText(context, "${idsParaDevolver.size} equipos devueltos a Bodega Principal", Toast.LENGTH_LONG).show()
-                                }
+    if (mostrarDialogoConfirmarCierre) {
+        val idsParaDevolver = equiposDelEvento.filter { verificacionEntradaMap[it.id] == true }.map { it.id }
+        AlertDialog(
+            onDismissRequest = { mostrarDialogoConfirmarCierre = false },
+            title = { Text("Confirmar Cierre y Devolución a Bodega") },
+            text = {
+                Text(
+                    "¿Confirmas que deseas restablecer los ${idsParaDevolver.size} equipos verificados al stock disponible en 'Bodega Principal'?"
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        equipoViewModel.devolverEquiposDeEventoABodega(idsParaDevolver) { res ->
+                            if (res is Resultado.Exito) {
+                                Toast.makeText(context, "${idsParaDevolver.size} equipos devueltos a Bodega Principal", Toast.LENGTH_LONG).show()
                             }
-                            mostrarDialogoConfirmarCierre = false
                         }
-                    ) {
-                        Text("Sí, Devolver a Bodega")
+                        mostrarDialogoConfirmarCierre = false
                     }
-                },
-                dismissButton = {
-                    TextButton(onClick = { mostrarDialogoConfirmarCierre = false }) {
-                        Text("Cancelar")
-                    }
+                ) {
+                    Text("Sí, Devolver a Bodega")
                 }
-            )
-        }
-
-        if (mostrarDialogoAsignar) {
-            DialogoAsignarEquiposAEvento(
-                evento = evento,
-                equiposDisponibles = todosLosEquipos.filter {
-                    !equiposDelEvento.contains(it)
-                },
-                onDismiss = { mostrarDialogoAsignar = false },
-                onAsignar = { equiposSeleccionados ->
-                    equiposSeleccionados.forEach { equipo ->
-                        equipoViewModel.actualizarEquipoExistente(
-                            equipoActualizado = equipo.copy(
-                                ubicacionActual = evento.ubicacion
-                            ),
-                            onResultado = {}
-                        )
-                    }
-                    mostrarDialogoAsignar = false
+            },
+            dismissButton = {
+                TextButton(onClick = { mostrarDialogoConfirmarCierre = false }) {
+                    Text("Cancelar")
                 }
-            )
-        }
+            }
+        )
     }
 }
 
@@ -634,9 +697,9 @@ fun DialogoAsignarEquiposAEvento(
         confirmButton = {
             Button(
                 enabled = seleccionados.isNotEmpty(),
-                onClick = { onAsignar(seleccionados.toList()) }
+                onClick = { onAsignar(seleccionados) }
             ) {
-                Text("Asignar (${seleccionados.size})")
+                Text("Asignar ${seleccionados.size} Equipos")
             }
         },
         dismissButton = {
